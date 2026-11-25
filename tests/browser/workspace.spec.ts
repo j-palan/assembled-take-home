@@ -167,7 +167,9 @@ test('overview shows active issues, recent alerts, and links to the matching evi
     .locator('.notification-card')
     .filter({ has: page.getByRole('button', { expanded: true }) });
   await expect(expanded.getByRole('heading', { name: 'Latest update' })).toBeInViewport();
-  await expect(expanded.getByText(/Out of adherence for 30 min/)).toBeVisible();
+  await expect(
+    expanded.getByRole('paragraph').filter({ hasText: /^Out of adherence for 30 min/ }),
+  ).toBeVisible();
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await recent.getByRole('button', { name: /View alert: Billing backlog/ }).click();
   await expect(
@@ -223,6 +225,7 @@ test('freshness and unknown duration remain explicit until a newer valid check a
   const missing = page.getByRole('region', { name: 'Checks needing data' });
   await expect(missing.getByText('Agent a_23 · Duration unknown')).toBeVisible();
   const activeCard = page.locator('.notification-card').filter({ hasText: 'Agent a_88' });
+  await expect(activeCard.getByRole('button')).toContainText('Out of adherence for 30 min');
   await expect(
     activeCard.getByText('Last observed May 26, 10:30:00 UTC', { exact: true }),
   ).toBeVisible();
@@ -245,6 +248,9 @@ test('freshness and unknown duration remain explicit until a newer valid check a
   await expect(
     activeCard.getByText('Last observed May 26, 10:31:00 UTC', { exact: true }),
   ).toBeVisible();
+  await expect(activeCard.getByRole('button')).toContainText(
+    'Last confirmed: Out of adherence for 30 min',
+  );
   await activeCard.getByRole('button', { expanded: false }).click();
   await expect(
     activeCard.getByText('Confirmed May 26, 10:30:00 UTC', { exact: true }),

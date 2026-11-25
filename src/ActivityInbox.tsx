@@ -72,6 +72,7 @@ export function ActivityInbox({
               ? incompleteCheck(latestCheck)
               : null;
           const recipientName = recipients.find((r) => r.id === n.recipientId)?.name;
+          const summaryEvidence = state === 'active' && incident ? incident.evidence : n.evidence;
           return (
             <article className="notification-card" key={n.id}>
               <button
@@ -93,7 +94,8 @@ export function ActivityInbox({
                     </span>
                   </span>
                   <span className="notification-description">
-                    {entityName(n.entityId)} · {n.evidence.message.split(';')[0]}
+                    {entityName(n.entityId)} · {unknown ? 'Last confirmed: ' : ''}
+                    {summaryEvidence.message.split(';')[0]}
                   </span>
                   <small>
                     {recipientName} · {n.channel === 'slack' ? 'Slack' : 'In-app'} ·{' '}
