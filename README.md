@@ -29,10 +29,10 @@ Prefer the terminal? `npm run replay` evaluates the sample in an isolated, in-me
 ## A three-minute demo
 
 1. Start on **Overview**. **Needs attention** shows active issues, **Rules** summarizes enabled/paused configuration, and **Recent alerts** shows the latest notifications. Select an issue or alert to open its evidence in Activity. Open **Rules** to manage configuration.
-2. Select **Create rule**. Choose a condition, queues, and recipient. Names are generated automatically; expand **Rule name** to customize one. **Test with sample** shows how many alerts it would produce without changing Activity.
+2. Select **Create rule**. Choose a condition, queues, and recipient. Names are generated automatically; expand **Rule name** to customize one. **Test with sample** shows when and why alerts would fire, including the observed value and threshold. Empty previews explain which condition was not met. Activity is unchanged.
 3. Select **Run demo**. The app evaluates the sample morning and returns to **Overview** with the results. Select an alert to open **Activity**. Expand an alert to see why it fired and its latest update. Delivery receipts and event IDs are under **Delivery & event details**.
 4. For a slower walkthrough, open the arrow beside **Run demo** to play, pause, or step through events. **View event log** shows duplicate/conflict handling and missing data.
-5. Edit a rule by selecting its name, or use its three-dot menu. **Reset demo** keeps your rules and clears the sample history so you can try again.
+5. Edit a rule by selecting its name, or use its three-dot menu. If it has active issues, the editor explains how many will be closed before you save. **Reset demo** keeps your rules and clears the sample history so you can try again.
 
 With the original three rules, the expected opening alerts are:
 
@@ -55,7 +55,7 @@ At the end, three incidents are resolved; a_88’s adherence incident remains ac
 
 **Preview before saving.** The sample is useful evidence, not a claim about future alert volume. Preview always evaluates the draft as enabled in its own database, across the entire sample. Saving a rule only affects future fresh observations.
 
-**Observation-based duration.** Adherence uses `violation_started_at`; it fires at the first fresh check at or beyond the duration. A missing start time cannot establish duration. The sample has large observation gaps, so the app never infers recovery from silence. Long-call alerts would need timers and stale-state handling to fire during calls; they are deferred rather than approximated from completed-call durations.
+**Observation-based duration.** Adherence uses `violation_started_at`; it fires at the first fresh check at or beyond the duration. A missing start time cannot establish duration. Overview and Activity label current checks with missing evidence as “Duration unknown” or “Queue membership unknown”; a newer complete observation clears the notice. Active alerts show their observation time, and retain the last confirmed evidence when a newer check is incomplete. The sample has large observation gaps, so the app never infers recovery from silence. Long-call alerts would need timers and stale-state handling to fire during calls; they are deferred rather than approximated from completed-call durations.
 
 No digests, arbitrary expressions, escalation chains, forecast-based alerts, delivery integrations, auth, or tenancy plumbing. No cooldown or hysteresis: a healthy observation resolves an incident, and a subsequent breach can alert again. Stabilization windows would be the next addition for flapping metrics.
 
