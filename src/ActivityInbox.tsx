@@ -1,13 +1,25 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell, CheckCheck, ChevronDown } from 'lucide-react';
 import { recipients } from '../server/domain';
 import { entityName, time, type AppState } from './api';
 import { EmptyState } from './ui';
 
-export function ActivityInbox({ data }: { data: AppState }) {
+export function ActivityInbox({
+  data,
+  initialExpanded,
+}: {
+  data: AppState;
+  initialExpanded?: string;
+}) {
   const [filter, setFilter] = useState('all');
   const [recipient, setRecipient] = useState('all');
-  const [expanded, setExpanded] = useState<string | null>(null);
+  const [expanded, setExpanded] = useState<string | null>(initialExpanded ?? null);
+  useEffect(() => {
+    if (!initialExpanded) return;
+    const card = document.getElementById(`notification-${initialExpanded}`)?.closest('article');
+    card?.scrollIntoView({ block: 'nearest' });
+    card?.querySelector<HTMLButtonElement>('.notification-trigger')?.focus({ preventScroll: true });
+  }, [initialExpanded]);
   const notifications = data.notifications.filter(
     (n) =>
       (recipient === 'all' || n.recipientId === recipient) &&

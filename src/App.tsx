@@ -6,6 +6,7 @@ import {
   Check,
   ChevronDown,
   LoaderCircle,
+  LayoutDashboard,
   Pause,
   Play,
   Plus,
@@ -17,19 +18,21 @@ import {
 import type { Rule } from '../server/domain';
 import { api, time, type AppState } from './api';
 import { RuleEditor } from './RuleEditor';
+import { Overview } from './Overview';
 import { RuleCard } from './RuleCard';
 import { ActivityInbox } from './ActivityInbox';
 import { ProcessingLog } from './ProcessingLog';
 import { EmptyState, Confirmation } from './ui';
 
-type Page = 'rules' | 'activity' | 'processing';
+type Page = 'overview' | 'rules' | 'activity' | 'processing';
 function initialPage(): Page {
   const hash = window.location.hash.slice(1);
-  return hash === 'activity' || hash === 'processing' ? hash : 'rules';
+  return hash === 'rules' || hash === 'activity' || hash === 'processing' ? hash : 'overview';
 }
 
 export function App() {
   const [page, setPage] = useState<Page>(initialPage);
+  const [selectedAlert, setSelectedAlert] = useState<string | undefined>();
   const [data, setData] = useState<AppState | null>(null);
   const [connectionError, setConnectionError] = useState('');
   const [error, setError] = useState('');
@@ -65,7 +68,9 @@ export function App() {
     return () => clearInterval(timer);
   }, [refresh]);
   useEffect(() => {
-    const change = () => setPage(initialPage());
+    const change = () => {
+      if (window.location.hash !== '#main') setPage(initialPage());
+    };
     window.addEventListener('hashchange', change);
     return () => window.removeEventListener('hashchange', change);
   }, []);
@@ -94,7 +99,7 @@ export function App() {
     };
   }, []);
   useEffect(() => {
-    document.title = `Intraday · ${page === 'rules' ? 'Rules' : page === 'activity' ? 'Activity' : 'Event log'}`;
+    document.title = `Intraday · ${page === 'overview' ? 'Overview' : page === 'rules' ? 'Rules' : page === 'activity' ? 'Activity' : 'Event log'}`;
   }, [page]);
   useEffect(() => {
     if (!notice) return;
@@ -143,7 +148,7 @@ export function App() {
       </a>
       <header className="app-header">
         <div className="header-inner">
-          <a href="#rules" className="brand" aria-label="Intraday home">
+          <a href="#overview" className="brand" aria-label="Intraday home">
             <span className="brand-mark">
               <Activity size={22} />
             </span>
@@ -157,8 +162,24 @@ export function App() {
       <main id="main" tabIndex={-1}>
         <div className="page-heading">
           <div>
-            <h1>Notifications</h1>
-            <p>Choose when your team gets a heads-up.</p>
+            <h1>
+              {page === 'overview'
+                ? 'Overview'
+                : page === 'rules'
+                  ? 'Notification rules'
+                  : page === 'activity'
+                    ? 'Activity'
+                    : 'Event log'}
+            </h1>
+            <p>
+              {page === 'overview'
+                ? 'Your rules and alerts, at a glance.'
+                : page === 'rules'
+                  ? 'Choose when your team gets a heads-up.'
+                  : page === 'activity'
+                    ? 'See what fired and who received it.'
+                    : 'How each event was handled.'}
+            </p>
           </div>
           <button className="button primary" onClick={() => setEditor('new')}>
             <Plus size={18} />
@@ -166,11 +187,19 @@ export function App() {
           </button>
         </div>
         <nav className="page-tabs" aria-label="Main navigation">
+          <a href="#overview" aria-current={page === 'overview' ? 'page' : undefined}>
+            <LayoutDashboard size={17} />
+            Overview
+          </a>
           <a href="#rules" aria-current={page === 'rules' ? 'page' : undefined}>
             <Settings2 size={17} />
             Rules <span>{data?.rules.length ?? 0}</span>
           </a>
-          <a href="#activity" aria-current={page === 'activity' ? 'page' : undefined}>
+          <a
+            href="#activity"
+            onClick={() => setSelectedAlert(undefined)}
+            aria-current={page === 'activity' ? 'page' : undefined}
+          >
             <Bell size={17} />
             Activity <span>{data?.notifications.length ?? 0}</span>
           </a>
@@ -230,7 +259,7 @@ export function App() {
                       className="button secondary"
                       disabled={busy}
                       onClick={async () => {
-                        if (await control('finish')) window.location.hash = 'activity';
+                        if (await control('finish')) window.location.hash = 'overview';
                       }}
                     >
                       {busy ? <LoaderCircle size={16} className="spin" /> : <Play size={16} />}Run
@@ -317,6 +346,16 @@ export function App() {
                 </p>
               )}
             </section>
+            {page === 'overview' && (
+              <Overview
+                data={data}
+                onOpenAlert={(id) => {
+                  setSelectedAlert(id);
+                  window.location.hash = 'activity';
+                }}
+                onEditRule={setEditor}
+              />
+            )}
             {page === 'rules' && (
               <section aria-label="Notification rules">
                 <div className="list-heading">
@@ -363,7 +402,13 @@ export function App() {
                 </div>
               </section>
             )}
-            {page === 'activity' && <ActivityInbox data={data} />}
+            {page === 'activity' && (
+              <ActivityInbox
+                key={selectedAlert ?? 'all'}
+                data={data}
+                initialExpanded={selectedAlert}
+              />
+            )}
             {page === 'processing' && <ProcessingLog data={data} />}
           </>
         )}

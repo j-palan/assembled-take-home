@@ -1,11 +1,19 @@
 import { test, expect } from '@playwright/test';
+import { defaultRules } from '../../server/domain';
+
+test.beforeEach(async ({ request }) => {
+  await request.post('/api/replay', { data: { action: 'reset' } });
+  const state = await (await request.get('/api/state')).json();
+  for (const rule of state.rules) await request.delete(`/api/rules/${rule.id}`);
+  for (const rule of defaultRules) await request.post('/api/rules', { data: rule });
+});
 
 test('create and test a rule, run the demo, inspect delivery, then edit and delete', async ({
   page,
 }) => {
   const browserErrors: string[] = [];
   page.on('pageerror', (e) => browserErrors.push(e.message));
-  await page.goto('/');
+  await page.goto('/#rules');
   await expect(page.getByRole('heading', { name: 'Billing SLA breached' })).toBeVisible();
   await page.screenshot({ path: 'test-results/rules-desktop.png', fullPage: true });
   await page.getByRole('button', { name: 'Create rule', exact: true }).click();
@@ -31,7 +39,8 @@ test('create and test a rule, run the demo, inspect delivery, then edit and dele
   await expect(page.getByRole('heading', { name: 'Tier 2 SLA watch' })).toBeVisible();
   // The primary demo action takes a newcomer straight to visible results.
   await page.getByRole('button', { name: 'Run demo', exact: true }).click();
-  await expect(page).toHaveURL(/#activity$/);
+  await expect(page).toHaveURL(/#overview$/);
+  await page.getByRole('link', { name: /^Activity/ }).click();
   await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '96');
   await expect(page.getByText('5 alerts · 1 still active')).toBeVisible();
   const state = await (await page.request.get('/api/state')).json();
@@ -76,7 +85,7 @@ test('create and test a rule, run the demo, inspect delivery, then edit and dele
 });
 
 test('responsive layout, automatic rule names, and keyboard focus', async ({ page }) => {
-  await page.goto('/');
+  await page.goto('/#rules');
   await expect(page.getByRole('heading', { name: 'Billing SLA breached' })).toBeVisible();
   for (const width of [375, 768, 1024, 1440]) {
     await page.setViewportSize({ width, height: 1000 });
@@ -118,4 +127,61 @@ test('responsive layout, automatic rule names, and keyboard focus', async ({ pag
     .toBeGreaterThan(0);
   await page.getByRole('button', { name: 'Pause', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
+});
+
+test('overview shows active issues, recent alerts, and links to the matching evidence', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await expect(page.getByRole('link', { name: 'Overview', exact: true })).toHaveAttribute(
+    'aria-current',
+    'page',
+  );
+  await expect(page.getByRole('heading', { name: 'Ready to watch' })).toBeVisible();
+  const rules = page.getByRole('region', { name: 'Rules', exact: true });
+  await expect(rules.getByText('3enabled', { exact: false })).toBeVisible();
+  await page.screenshot({ path: 'test-results/overview-empty.png', fullPage: true });
+  await page.getByRole('button', { name: 'Run demo', exact: true }).click();
+  const attention = page.getByRole('region', { name: /Needs attention/ });
+  await expect(
+    attention.getByRole('button', { name: 'View active issue for Agent a_88' }),
+  ).toBeVisible();
+  await expect(attention.getByText('Out of adherence for 30 min')).toBeVisible();
+  await expect(attention.getByText('May 26 · 10:30 UTC')).toBeVisible();
+  const recent = page.getByRole('region', { name: 'Recent alerts' });
+  await expect(recent.getByRole('button')).toHaveCount(4);
+  await expect(recent.getByText('Resolved', { exact: true })).toHaveCount(3);
+  for (const width of [1440, 1024, 768, 375]) {
+    await page.setViewportSize({ width, height: 1000 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(
+      true,
+    );
+    await page.screenshot({ path: `test-results/overview-${width}.png`, fullPage: true });
+  }
+  await attention.getByRole('button', { name: 'View active issue for Agent a_88' }).click();
+  await expect(page).toHaveURL(/#activity$/);
+  const expanded = page
+    .locator('.notification-card')
+    .filter({ has: page.getByRole('button', { expanded: true }) });
+  await expect(expanded.getByRole('heading', { name: 'Latest update' })).toBeInViewport();
+  await expect(expanded.getByText(/Out of adherence for 30 min/)).toBeVisible();
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await recent.getByRole('button', { name: /View alert: Billing backlog/ }).click();
+  await expect(
+    page.getByRole('button', { name: /Billing backlog above 20/, expanded: true }),
+  ).toBeVisible();
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await rules.getByRole('button', { name: 'Edit Billing SLA breached' }).click();
+  await expect(page.getByRole('dialog', { name: 'Edit rule' })).toBeVisible();
+  await page.keyboard.press('Escape');
+  await rules.getByRole('link', { name: 'Manage rules' }).click();
+  await expect(page).toHaveURL(/#rules$/);
+  await page.getByRole('switch', { name: 'Enable Billing SLA breached' }).click();
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await expect(rules.getByText('2enabled', { exact: false })).toBeVisible();
+  await expect(rules.getByText('1paused', { exact: false })).toBeVisible();
+  await page.getByRole('button', { name: 'Reset demo', exact: true }).click();
+  await page.getByRole('dialog').getByRole('button', { name: 'Reset demo', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'Ready to watch' })).toBeVisible();
+  await expect(recent.getByRole('button')).toHaveCount(0);
 });
