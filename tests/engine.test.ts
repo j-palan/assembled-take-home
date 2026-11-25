@@ -3,13 +3,7 @@ import assert from 'node:assert/strict';
 import { mkdtempSync, rmSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import {
-  defaultRules,
-  evaluate,
-  eventSchema,
-  ruleSchema,
-  type RuleInput,
-} from '../server/domain.ts';
+import { defaultRules, evaluate, eventSchema, ruleSchema } from '../server/domain.ts';
 import { Store } from '../server/store.ts';
 
 const queue = (event_id: string, minute: number, waiting = 21, queue_id = 'billing') => ({
@@ -204,6 +198,15 @@ test('sample replay has stable expected notifications and audits its intentional
     for (const [index, e] of events.entries()) s.ingest(e, index + 1);
     s.flushOutbox();
     assert.equal(s.listReceipts().length, 96);
+    assert.deepEqual(
+      s.stats().map((s) => [s.outcome, s.count]),
+      [
+        ['accepted', 93],
+        ['conflict', 1],
+        ['stale', 1],
+        ['unknown', 1],
+      ],
+    );
     assert.equal(s.listReceipts().filter((r) => r.outcome === 'conflict').length, 1);
     assert.equal(s.listReceipts().filter((r) => r.outcome === 'stale').length, 1);
     assert.equal(s.listReceipts().filter((r) => r.outcome === 'unknown').length, 1);
@@ -219,4 +222,23 @@ test('sample replay has stable expected notifications and audits its intentional
         ['Agent out of adherence for 10 min', 'a_88', '2026-05-26T10:15:00.000Z'],
       ],
     );
+  }));
+
+test('nullable unused forecasts do not block SLA alerts; unknown and empty membership have distinct semantics', () =>
+  using((s) => {
+    s.createRule(defaultRules[0]);
+    s.createRule(defaultRules[2]);
+    assert.equal(s.ingest({ ...queue('q', 1), volume_forecast_next_15m: null }), 'accepted');
+    assert.equal(s.listNotifications().length, 1);
+    s.ingest(adherence('a1', 10));
+    assert.equal(s.ingest({ ...adherence('a2', 11), queue_ids: null }), 'unknown');
+    assert.equal(s.listIncidents().find((i) => i.entityId === 'a_19')?.status, 'active');
+    s.ingest({ ...adherence('a3', 12), queue_ids: [] });
+    assert.equal(s.listIncidents().find((i) => i.entityId === 'a_19')?.status, 'closed');
+    assert.equal(
+      s.listIncidents().find((i) => i.entityId === 'a_19')?.closeReason,
+      'Agent left selected queues',
+    );
+    s.ingest(adherence('a4', 13));
+    assert.equal(s.listNotifications().length, 3);
   }));

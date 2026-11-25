@@ -8,7 +8,9 @@ Thresholds run on observations, not wall-clock timers; no backfilled alerts when
 
 Events are processed in arrival order. A unique event ID owns its first payload (canonical key ordering); identical retries are ignored and conflicting retries are audited. Per entity AND event type, timestamps must strictly increase to affect state. Equal-time distinct events are audited as stale: no trustworthy tie breaker is supplied. Late events are retained but do not rewrite current incidents. No watermark sorting silently repairs the demo feed.
 
-A missing adherence start is unknown, not a zero-duration violation. Invalid timestamps, future violation starts, inconsistent state/violation flags, negative counters, and invalid types are rejected with validation details. Malformed records do not halt a replay. The feed is a sampled 90-minute story, not complete cadence data; avoid inventing state between observations.
+A missing adherence start is unknown, not a zero-duration violation. Invalid timestamps, future violation starts, negative counters, and invalid types are rejected with validation details. Malformed records do not halt a replay. Null forecasts are allowed: none of the implemented rules depends on forecast data. Agent state names are open strings to support custom states. Null queue membership means unknown and never reuses a previous assignment. An explicit empty membership is valid; a fresh adherence check outside a rule’s scope closes its incident as "Agent left selected queues", rather than reporting recovery.
+
+The feed is a sampled 90-minute story, not complete cadence data; avoid inventing state between observations.
 
 SQLite transactions atomically persist event acceptance, latest observations, incident changes, and outbox entries. A single-process worker retries pending deliveries. The database stub uses notification IDs as idempotency keys, making its visible inbox idempotent; external providers would need their own idempotency support. This is not a claim of universal exactly-once delivery.
 

@@ -7,8 +7,8 @@ const timestamp = z
   .transform((s) => new Date(s).toISOString());
 const count = z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER);
 const base = { event_id: id, ts: timestamp };
-const queues = z.array(id).min(1).max(100);
-const state = z.enum(['available', 'on_call', 'on_break', 'in_meeting', 'offline']);
+const queues = z.array(id).max(100).nullable();
+const state = z.string().trim().min(1).max(80);
 export const eventSchema = z
   .discriminatedUnion('type', [
     z
@@ -22,7 +22,7 @@ export const eventSchema = z
         agents_available: count,
         agents_on_call: count,
         volume_last_15m: count,
-        volume_forecast_next_15m: count,
+        volume_forecast_next_15m: count.nullable(),
       })
       .strict(),
     z
@@ -93,7 +93,12 @@ export const ruleSchema = z
 export type RuleInput = z.infer<typeof ruleSchema>;
 export type Rule = RuleInput & { id: string; revision: number; createdAt: string };
 export type Evidence = { value: number; threshold: number; unit: string; message: string };
-export type Evaluation = { entityId: string; match: boolean | null; evidence: Evidence | null };
+export type Evaluation = {
+  entityId: string;
+  match: boolean | null;
+  evidence: Evidence | null;
+  closeReason?: string;
+};
 
 /** Pure observation-based evaluation; null means insufficient evidence, not recovery. */
 export function evaluate(rule: RuleInput, event: Event): Evaluation | null {
@@ -119,11 +124,15 @@ export function evaluate(rule: RuleInput, event: Event): Evaluation | null {
       },
     };
   }
-  if (
-    event.type === 'adherence_check' &&
-    rule.kind === 'adherence' &&
-    event.queue_ids.some((q) => rule.queueIds.includes(q as (typeof rule.queueIds)[number]))
-  ) {
+  if (event.type === 'adherence_check' && rule.kind === 'adherence') {
+    if (event.queue_ids === null) return { entityId: event.agent_id, match: null, evidence: null };
+    if (!event.queue_ids.some((q) => rule.queueIds.includes(q as (typeof rule.queueIds)[number])))
+      return {
+        entityId: event.agent_id,
+        match: false,
+        evidence: null,
+        closeReason: 'Agent left selected queues',
+      };
     if (event.in_violation && !event.violation_started_at)
       return { entityId: event.agent_id, match: null, evidence: null };
     const seconds = event.in_violation

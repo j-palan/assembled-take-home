@@ -14,6 +14,9 @@ try {
     );
   }
   console.log('Processing outcomes:', store.stats());
+  for (const receipt of store.listReceipts().filter((r) => r.outcome !== 'accepted')) {
+    console.log(`${receipt.eventId ?? 'Invalid event'}: ${receipt.outcome} — ${receipt.detail}`);
+  }
   console.log(`Delivered ${store.deliveredCount()} notifications from ${replay.cursor} events.`);
 } finally {
   store.close();

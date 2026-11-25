@@ -120,7 +120,9 @@ export class Store {
   }
   private writeRule(rule: Rule) {
     this.db
-      .prepare('INSERT OR REPLACE INTO rules VALUES (?,?,?,?)')
+      .prepare(
+        'INSERT INTO rules VALUES (?,?,?,?) ON CONFLICT(id) DO UPDATE SET kind=excluded.kind, enabled=excluded.enabled, data=excluded.data',
+      )
       .run(rule.id, rule.kind, Number(rule.enabled), JSON.stringify(rule));
   }
   updateRule(id: string, input: unknown): Rule | undefined {
@@ -210,13 +212,17 @@ export class Store {
   }
   private process(raw: unknown): Outcome {
     const result = eventSchema.safeParse(raw);
-    if (!result.success)
+    if (!result.success) {
+      const partial = raw && typeof raw === 'object' ? (raw as Record<string, unknown>) : {};
       return this.receipt(
-        null,
-        null,
+        typeof partial.event_id === 'string' ? partial.event_id.slice(0, 120) : null,
+        typeof partial.ts === 'string' && Number.isFinite(Date.parse(partial.ts))
+          ? new Date(partial.ts).toISOString()
+          : null,
         'invalid',
         result.error.issues.map((i) => `${i.path.join('.')}: ${i.message}`).join('; '),
       );
+    }
     const e = result.data;
     const payload = canonical(e);
     const existing = this.db.prepare('SELECT payload FROM events WHERE id=?').get(e.event_id) as
@@ -252,7 +258,9 @@ export class Store {
         : e.type === 'adherence_check'
           ? ['adherence']
           : [];
-    let unknown = e.type === 'adherence_check' && e.in_violation && !e.violation_started_at;
+    const missingStart = e.type === 'adherence_check' && e.in_violation && !e.violation_started_at;
+    const missingScope = e.type === 'adherence_check' && e.queue_ids === null;
+    let unknown = missingStart || missingScope;
     for (const kind of relevant) {
       const rules = this.db
         .prepare('SELECT data FROM rules WHERE kind=? AND enabled=1')
@@ -311,11 +319,11 @@ export class Store {
         } else if (active)
           this.writeIncident({
             ...active,
-            status: 'resolved',
+            status: evaluation.closeReason ? 'closed' : 'resolved',
             lastObservedAt: e.ts,
             closedAt: e.ts,
-            closeReason: 'Condition cleared',
-            evidence: evaluation.evidence!,
+            closeReason: evaluation.closeReason ?? 'Condition cleared',
+            evidence: evaluation.evidence ?? active.evidence,
           });
       }
     }
@@ -324,7 +332,9 @@ export class Store {
       e.ts,
       unknown ? 'unknown' : 'accepted',
       unknown
-        ? 'Missing violation_started_at; duration unknown, incident state preserved.'
+        ? missingScope
+          ? 'Queue membership unknown; scoped incident state preserved.'
+          : 'Missing violation_started_at; duration unknown, incident state preserved.'
         : 'Fresh observation processed.',
     );
   }
