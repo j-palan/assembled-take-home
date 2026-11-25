@@ -297,3 +297,68 @@ test('freshness and unknown duration remain explicit until a newer valid check a
   await page.getByRole('link', { name: 'Overview', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'No active issues' })).toBeVisible();
 });
+
+test('edit impact counts active issues and saving stops them without retrospective alerts', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/replay', { data: { action: 'finish' } });
+  const check = {
+    event_id: 'ui_edit_19',
+    ts: '2026-05-26T10:31:00Z',
+    type: 'adherence_check',
+    agent_id: 'a_19',
+    queue_ids: ['billing'],
+    scheduled_state: 'available',
+    actual_state: 'on_break',
+    in_violation: true,
+    violation_started_at: '2026-05-26T10:00:00Z',
+  };
+  await request.post('/api/events', { data: check });
+  const before = await (await request.get('/api/state')).json();
+  await page.goto('/#rules');
+  await page.getByRole('button', { name: 'Billing SLA breached', exact: true }).click();
+  await expect(page.getByRole('status', { name: 'Impact of saving' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page
+    .getByRole('button', { name: 'Agent out of adherence for 10 min', exact: true })
+    .click();
+  const editor = page.getByRole('dialog');
+  await expect(editor.getByRole('status', { name: 'Impact of saving' })).toContainText(
+    'Saving will close 2 current issues.',
+  );
+  await editor.getByLabel('For at least').fill('12');
+  await expect(
+    editor.getByText(
+      'They’ll be marked stopped. The updated rule starts with the next observation.',
+    ),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await page.screenshot({ path: 'test-results/edit-impact-mobile.png', fullPage: true });
+  await editor.getByRole('button', { name: 'Save changes' }).click();
+  await expect(editor).not.toBeVisible();
+  const after = await (await request.get('/api/state')).json();
+  expect(after.notifications).toHaveLength(before.notifications.length);
+  const adherence = after.rules.find((r: { kind: string }) => r.kind === 'adherence');
+  expect(
+    after.incidents.filter(
+      (i: { ruleId: string; status: string }) => i.ruleId === adherence.id && i.status === 'active',
+    ),
+  ).toHaveLength(0);
+  expect(
+    after.incidents.filter(
+      (i: { ruleId: string; closeReason: string }) =>
+        i.ruleId === adherence.id && i.closeReason === 'Rule changed',
+    ),
+  ).toHaveLength(2);
+  await page
+    .getByRole('button', { name: 'Agent out of adherence for 10 min', exact: true })
+    .click();
+  await expect(editor.getByRole('status', { name: 'Impact of saving' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await request.post('/api/events', {
+    data: { ...check, event_id: 'ui_edit_19_fresh', ts: '2026-05-26T10:32:00Z' },
+  });
+  const fresh = await (await request.get('/api/state')).json();
+  expect(fresh.notifications).toHaveLength(before.notifications.length + 1);
+});

@@ -426,6 +426,12 @@ export function App() {
       {editor && (
         <RuleEditor
           rule={editor === 'new' ? undefined : editor}
+          activeIncidentCount={
+            editor === 'new'
+              ? 0
+              : (data?.incidents.filter((i) => i.ruleId === editor.id && i.status === 'active')
+                  .length ?? 0)
+          }
           onClose={() => setEditor(null)}
           onSaved={async () => {
             await refresh();

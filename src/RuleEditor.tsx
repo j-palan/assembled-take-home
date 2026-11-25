@@ -1,5 +1,14 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import { Check, Clock3, Inbox, LoaderCircle, ShieldAlert, Users, X } from 'lucide-react';
+import {
+  Check,
+  Clock3,
+  Inbox,
+  LoaderCircle,
+  ShieldAlert,
+  TriangleAlert,
+  Users,
+  X,
+} from 'lucide-react';
 import {
   queueOptions,
   recipients,
@@ -62,10 +71,12 @@ export function RuleEditor({
   rule,
   onClose,
   onSaved,
+  activeIncidentCount = 0,
 }: {
   rule?: Rule;
   onClose: () => void;
   onSaved: () => Promise<void>;
+  activeIncidentCount?: number;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
   const returnFocus = useRef(document.activeElement as HTMLElement | null);
@@ -295,7 +306,20 @@ export function RuleEditor({
               <Check size={16} />
               <span>One alert per issue. We’ll update it until things recover.</span>
             </div>
-            {rule && <p className="help">Saving restarts this rule with the next update.</p>}
+            {rule && activeIncidentCount > 0 && (
+              <div className="edit-impact" role="status" aria-label="Impact of saving">
+                <TriangleAlert size={18} />
+                <div>
+                  <strong>
+                    Saving will close {activeIncidentCount} current{' '}
+                    {activeIncidentCount === 1 ? 'issue' : 'issues'}.
+                  </strong>
+                  <p>
+                    They’ll be marked stopped. The updated rule starts with the next observation.
+                  </p>
+                </div>
+              </div>
+            )}
             {preview && (
               <section className="preview-results" aria-live="polite">
                 <strong>

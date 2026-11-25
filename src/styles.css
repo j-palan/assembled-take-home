@@ -1797,3 +1797,28 @@ dialog::backdrop {
     line-height: 1.6;
   }
 }
+
+.edit-impact {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border: 1px solid #e8d7b3;
+  border-radius: 8px;
+  background: #fffaee;
+}
+.edit-impact > svg {
+  margin-top: 1px;
+  color: #96713b;
+}
+.edit-impact strong {
+  font-size: 12px;
+  line-height: 1.6;
+  font-weight: 600;
+  color: #75572b;
+}
+.edit-impact p {
+  font-size: 12px;
+  color: #786447;
+  margin-top: 6px;
+}
