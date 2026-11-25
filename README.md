@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Open **http://localhost:3000**. Three example rules are created on the first run. Press **Play sample** for an accelerated replay, or **Run to end** for instant results.
+Open **http://localhost:3000**. Three example rules are created on the first run. Press **Run demo** to see the notifications immediately. Open the arrow beside it for optional step-by-step replay controls.
 
 For a production build:
 
@@ -22,17 +22,17 @@ npm run build
 npm start
 ```
 
-Rules, incidents, deliveries, and the replay cursor persist in `data/intraday.sqlite`. Restarting leaves replay paused at its last committed event. **Reset sample** clears event and notification history while preserving your rules. `PORT` and `DB_PATH` can override the defaults; `DB_PATH=:memory:` starts an ephemeral workspace. The server binds to localhost.
+Rules, incidents, deliveries, and the replay cursor persist in `data/intraday.sqlite`. Restarting leaves replay paused at its last committed event. **Reset demo** clears event and notification history while preserving your rules. `PORT` and `DB_PATH` can override the defaults; `DB_PATH=:memory:` starts an ephemeral workspace. The server binds to localhost.
 
 Prefer the terminal? `npm run replay` evaluates the sample in an isolated, in-memory database and prints notifications and processing diagnostics. It never changes the browser workspace.
 
 ## A three-minute demo
 
-1. Open **Rules** and edit “Billing SLA breached.” Scope and recipient are explicit; the summary explains the behavior. **Preview rule** shows when it would fire without changing the inbox.
-2. Close the editor and **Play sample**, then pause or step through events. Replay preserves arrival order and displays event time in UTC. Speed is measured in events/second, not simulated seconds/second.
-3. **Run to end**, then open **Activity inbox**. Expand an alert to compare its triggering evidence with the incident’s latest evidence, original event ID, recipient, and local delivery receipt. Filter by recipient or incident status.
-4. Open **Processing log** to inspect the conflicting retry, late observation, and unknown adherence duration.
-5. Pause a rule, edit a threshold, or add a Tier 2 SLA rule. Reset and replay to see the change. A Tier 2 SLA rule adds one alert at 10:00 UTC.
+1. Open **Rules**. Each row shows the condition and recipient; the switch turns it on or pauses it.
+2. Select **Create rule**. Choose a condition, queues, and recipient. Names are generated automatically; expand **Rule name** to customize one. **Test with sample** shows how many alerts it would produce without changing Activity.
+3. Select **Run demo**. The app evaluates the sample morning and opens **Activity** with the results. Expand an alert to see why it fired and its latest update. Delivery receipts and event IDs are under **Delivery & event details**.
+4. For a slower walkthrough, open the arrow beside **Run demo** to play, pause, or step through events. **View event log** shows duplicate/conflict handling and missing data.
+5. Edit a rule by selecting its name, or use its three-dot menu. **Reset demo** keeps your rules and clears the sample history so you can try again.
 
 With the original three rules, the expected opening alerts are:
 
@@ -117,7 +117,7 @@ Tests cover exact threshold boundaries, incident suppression/recovery/recurrence
 | `server/replay.ts`      | Arrival-order replay with durable cursor                              |
 | `server/app.ts`         | HTTP API, request validation, isolated preview                        |
 | `server/index.ts`       | Server startup, client serving, retry worker, shutdown                |
-| `src/RuleEditor.tsx`    | Template selection, validated form, sample preview                    |
+| `src/RuleEditor.tsx`    | Condition selection, generated names, validation, sample preview      |
 | `src/RuleCard.tsx`      | Rule summaries and controls                                           |
 | `src/ActivityInbox.tsx` | Routing receipts and incident evidence                                |
 | `src/ProcessingLog.tsx` | Event outcomes and data issues                                        |
