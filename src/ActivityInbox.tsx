@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Bell, CheckCheck, ChevronDown, ListFilter } from 'lucide-react';
+import { Bell, CheckCheck, ChevronDown } from 'lucide-react';
 import { recipients } from '../server/domain';
 import { entityName, time, type AppState } from './api';
 import { EmptyState } from './ui';
@@ -14,30 +14,26 @@ export function ActivityInbox({ data }: { data: AppState }) {
       (filter === 'all' || data.incidents.find((i) => i.id === n.incidentId)?.status === filter),
   );
   return (
-    <>
-      <div className="section-heading">
-        <div>
-          <h2>
-            Notification history <span className="number-badge">{data.notifications.length}</span>
-          </h2>
-          <p>Opening alerts stay here as incidents update and resolve.</p>
-        </div>
-      </div>
+    <section aria-label="Notification history">
       <div className="list-toolbar">
-        <div className="segmented" aria-label="Filter incidents">
-          {['all', 'active', 'resolved', 'closed'].map((f) => (
+        <div className="segmented" aria-label="Filter alerts">
+          {[
+            ['all', 'All'],
+            ['active', 'Active'],
+            ['resolved', 'Resolved'],
+            ['closed', 'Stopped'],
+          ].map(([value, label]) => (
             <button
-              key={f}
-              aria-pressed={filter === f}
-              className={filter === f ? 'selected' : ''}
-              onClick={() => setFilter(f)}
+              key={value}
+              aria-pressed={filter === value}
+              className={filter === value ? 'selected' : ''}
+              onClick={() => setFilter(value)}
             >
-              {f === 'all' ? 'All alerts' : f[0].toUpperCase() + f.slice(1)}
+              {label}
             </button>
           ))}
         </div>
-        <label className="filter-select">
-          <ListFilter size={15} />
+        <label>
           <span className="sr-only">Filter by recipient</span>
           <select value={recipient} onChange={(e) => setRecipient(e.target.value)}>
             <option value="all">All recipients</option>
@@ -53,6 +49,7 @@ export function ActivityInbox({ data }: { data: AppState }) {
         {notifications.map((n) => {
           const incident = data.incidents.find((i) => i.id === n.incidentId);
           const state = incident?.status ?? 'closed';
+          const recipientName = recipients.find((r) => r.id === n.recipientId)?.name;
           return (
             <article className="notification-card" key={n.id}>
               <button
@@ -61,76 +58,58 @@ export function ActivityInbox({ data }: { data: AppState }) {
                 aria-expanded={expanded === n.id}
                 aria-controls={`notification-${n.id}`}
               >
-                <span className={`notification-icon ${state === 'active' ? 'rose' : 'green'}`}>
+                <span className={`template-icon ${state === 'active' ? 'rose' : 'green'}`}>
                   {state === 'active' ? <Bell size={20} /> : <CheckCheck size={20} />}
                 </span>
                 <span className="notification-content">
-                  <span>
+                  <span className="notification-title">
                     <strong>{n.ruleName}</strong>
                     <span
                       className={`pill ${state === 'active' ? 'warning' : state === 'resolved' ? 'green' : 'neutral'}`}
                     >
-                      {state}
+                      {state === 'closed' ? 'Stopped' : state === 'active' ? 'Active' : 'Resolved'}
                     </span>
                   </span>
-                  <span>
-                    {entityName(n.entityId)} · {n.evidence.message}
+                  <span className="notification-description">
+                    {entityName(n.entityId)} · {n.evidence.message.split(';')[0]}
                   </span>
                   <small>
-                    {recipients.find((r) => r.id === n.recipientId)?.name} ·{' '}
-                    {n.channel === 'slack' ? 'Slack stub' : 'In-app inbox'} ·{' '}
-                    {n.deliveredAt
-                      ? 'Delivered'
-                      : n.lastError
-                        ? 'Retrying delivery'
-                        : 'Pending delivery'}
+                    {recipientName} · {n.channel === 'slack' ? 'Slack' : 'In-app'} ·{' '}
+                    {n.deliveredAt ? 'Delivered' : n.lastError ? 'Retrying' : 'Sending…'}
                   </small>
                 </span>
-                <span className="notification-time">
-                  {time(n.eventTime)}
-                  <small>UTC</small>
-                </span>
+                <span className="notification-time">{time(n.eventTime).slice(0, 5)}</span>
                 <ChevronDown size={17} className={expanded === n.id ? 'rotated' : ''} />
               </button>
               {expanded === n.id && (
                 <div className="notification-details" id={`notification-${n.id}`}>
-                  <div>
-                    <span className="tiny-label">TRIGGERING OBSERVATION</span>
-                    <p>
-                      {n.evidence.value} {n.evidence.unit} observed · threshold{' '}
-                      {n.evidence.threshold} {n.evidence.unit}
-                    </p>
-                    <code>{n.eventId}</code>
-                    <p>
-                      {time(n.eventTime)} UTC · {new Date(n.eventTime).toISOString().slice(0, 10)}
-                    </p>
+                  <div className="evidence-grid">
+                    <div>
+                      <h3>Why it fired</h3>
+                      <p>{n.evidence.message}</p>
+                      <small>{time(n.eventTime)} UTC</small>
+                    </div>
+                    <div>
+                      <h3>Latest update</h3>
+                      <p>{incident?.evidence.message}</p>
+                      <small>Last observed {time(incident?.lastObservedAt ?? null)} UTC</small>
+                      {incident?.closeReason && (
+                        <p className="close-reason">{incident.closeReason}</p>
+                      )}
+                    </div>
                   </div>
-                  <div>
-                    <span className="tiny-label">LATEST INCIDENT EVIDENCE</span>
-                    <p>{incident?.evidence.message}</p>
-                    <p>Last confirmed: {time(incident?.lastObservedAt ?? null)} UTC</p>
-                    {incident?.closeReason && (
-                      <p>
-                        {incident.closeReason} · {time(incident.closedAt)} UTC
-                      </p>
-                    )}
-                    <small>Based on observed events; no recovery inferred from silence.</small>
-                  </div>
-                  <div>
-                    <span className="tiny-label">DELIVERY RECEIPT</span>
+                  <details className="technical-details">
+                    <summary>Delivery & event details</summary>
                     <p>
-                      {n.deliveredAt ? 'Delivered to local inbox' : 'Awaiting delivery'} ·{' '}
+                      {n.deliveredAt ? 'Delivered to local inbox' : 'Pending delivery'} ·{' '}
                       {n.attempts} attempt{n.attempts === 1 ? '' : 's'}
                     </p>
                     <p>
-                      {n.channel === 'slack'
-                        ? 'Slack adapter is a local stub.'
-                        : 'In-app delivery is a local stub.'}{' '}
-                      No external messages sent.
+                      {recipientName} via {n.channel === 'slack' ? 'Slack' : 'in-app'} (local demo)
                     </p>
+                    <code>{n.eventId}</code>
                     {n.lastError && <p role="alert">{n.lastError}</p>}
-                    <code>{n.id}</code>
-                  </div>
+                  </details>
                 </div>
               )}
             </article>
@@ -139,19 +118,15 @@ export function ActivityInbox({ data }: { data: AppState }) {
         {!notifications.length && (
           <EmptyState
             Icon={Bell}
-            title={
-              data.notifications.length
-                ? 'No alerts match these filters'
-                : 'A quiet inbox, by design'
-            }
+            title={data.notifications.length ? 'No matching alerts' : 'Nothing to report yet'}
             text={
               data.notifications.length
-                ? 'Try another status or recipient.'
-                : 'Play the sample morning to see your rules in action. Only the first observation of each incident sends an alert.'
+                ? 'Try a different filter.'
+                : 'Run the demo above to see which rules send an alert.'
             }
           />
         )}
       </div>
-    </>
+    </section>
   );
 }

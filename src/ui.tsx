@@ -1,31 +1,6 @@
 import { useLayoutEffect, useRef, useState, type ReactNode } from 'react';
 import { Bell, LoaderCircle, TriangleAlert } from 'lucide-react';
 
-export function Metric({
-  label,
-  value,
-  suffix,
-  Icon,
-}: {
-  label: string;
-  value: number;
-  suffix: string;
-  Icon: typeof Bell;
-}) {
-  return (
-    <div className="metric">
-      <div>
-        <span>{label}</span>
-        <Icon size={17} />
-      </div>
-      <strong>
-        {value}
-        <small>{suffix}</small>
-      </strong>
-    </div>
-  );
-}
-
 export function EmptyState({
   Icon,
   title,

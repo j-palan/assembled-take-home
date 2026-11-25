@@ -1,16 +1,5 @@
 import { useLayoutEffect, useRef, useState } from 'react';
-import {
-  ArrowRight,
-  Bell,
-  Check,
-  Clock3,
-  Inbox,
-  LoaderCircle,
-  ShieldAlert,
-  Sparkles,
-  Users,
-  X,
-} from 'lucide-react';
+import { Check, Clock3, Inbox, LoaderCircle, ShieldAlert, Users, X } from 'lucide-react';
 import {
   queueOptions,
   recipients,
@@ -22,32 +11,22 @@ import {
 import { api, entityName, queueName, time, type Preview } from './api';
 
 export const templates = {
-  sla: {
-    label: 'SLA breach',
-    description: 'When the oldest ticket exceeds its SLA',
-    Icon: ShieldAlert,
-    color: 'rose',
-  },
-  backlog: {
-    label: 'Queue backlog',
-    description: 'When waiting tickets exceed a threshold',
-    Icon: Inbox,
-    color: 'amber',
-  },
-  adherence: {
-    label: 'Agent adherence',
-    description: 'When an agent stays out of adherence',
-    Icon: Users,
-    color: 'violet',
-  },
+  sla: { label: 'A queue misses its SLA', Icon: ShieldAlert, color: 'rose' },
+  backlog: { label: 'Too many tickets are waiting', Icon: Inbox, color: 'amber' },
+  adherence: { label: 'An agent is out of adherence', Icon: Users, color: 'violet' },
 };
 export function describe(rule: RuleInput) {
-  const scope = rule.queueIds.map(queueName).join(', ') || 'selected queues';
-  if (rule.kind === 'sla')
-    return `Notify when the oldest ticket in ${scope} exceeds the queue’s SLA.`;
+  const scope = rule.queueIds.map(queueName).join(', ') || 'Selected queues';
+  if (rule.kind === 'sla') return `${scope} · Oldest ticket exceeds its SLA`;
   if (rule.kind === 'backlog')
-    return `Notify when ${scope} has more than ${rule.threshold ?? '…'} tickets waiting.`;
-  return `Notify when an agent in ${scope} is out of adherence for at least ${rule.threshold ?? '…'} minutes.`;
+    return `${scope} · More than ${rule.threshold ?? '…'} tickets waiting`;
+  return `${scope} · Agent out of adherence for ${rule.threshold ?? '…'}+ minutes`;
+}
+function suggestedName(rule: RuleInput) {
+  const scope = rule.queueIds.map(queueName).join(', ') || 'Queue';
+  if (rule.kind === 'sla') return `${scope} SLA breached`;
+  if (rule.kind === 'backlog') return `${scope} backlog above ${rule.threshold ?? 20}`;
+  return `Agent out of adherence for ${rule.threshold ?? 10} min`;
 }
 const empty: RuleInput = {
   name: '',
@@ -58,7 +37,6 @@ const empty: RuleInput = {
   channel: 'slack',
   enabled: true,
 };
-
 export function RuleEditor({
   rule,
   onClose,
@@ -69,6 +47,7 @@ export function RuleEditor({
   onSaved: () => Promise<void>;
 }) {
   const dialog = useRef<HTMLDialogElement>(null);
+  const returnFocus = useRef(document.activeElement as HTMLElement | null);
   const [draft, setDraft] = useState<RuleInput>(
     rule
       ? {
@@ -86,11 +65,10 @@ export function RuleEditor({
   const [error, setError] = useState('');
   const [busy, setBusy] = useState<'save' | 'preview' | null>(null);
   const [preview, setPreview] = useState<Preview | null>(null);
-  const returnFocus = useRef(document.activeElement as HTMLElement | null);
   useLayoutEffect(() => {
     const node = dialog.current!;
     node.showModal();
-    node.querySelector<HTMLInputElement>('#rule-name')?.focus();
+    node.querySelector<HTMLSelectElement>('#rule-kind')?.focus();
     return () => {
       node.close();
       returnFocus.current?.focus();
@@ -102,55 +80,46 @@ export function RuleEditor({
     setErrors({});
     setError('');
   }
-  function validate() {
-    const result = ruleSchema.safeParse(draft);
-    if (result.success) {
-      setErrors({});
-      return result.data;
-    }
-    setErrors(Object.fromEntries(result.error.issues.map((i) => [i.path[0], i.message])));
-    requestAnimationFrame(() =>
-      dialog.current
-        ?.querySelector<HTMLElement>(
-          'input[aria-invalid="true"], fieldset[aria-invalid="true"] input',
-        )
-        ?.focus(),
-    );
-    return null;
-  }
   async function submit(mode: 'save' | 'preview') {
-    const valid = validate();
-    if (!valid) return;
+    const result = ruleSchema.safeParse({
+      ...draft,
+      name: draft.name.trim() || suggestedName(draft),
+    });
+    if (!result.success) {
+      setErrors(Object.fromEntries(result.error.issues.map((i) => [i.path[0], i.message])));
+      requestAnimationFrame(() =>
+        dialog.current
+          ?.querySelector<HTMLElement>(
+            'input[aria-invalid="true"], fieldset[aria-invalid="true"] input',
+          )
+          ?.focus(),
+      );
+      return;
+    }
     setBusy(mode);
     setError('');
     try {
-      if (mode === 'preview') setPreview(await api<Preview>('preview', 'POST', valid));
+      if (mode === 'preview') setPreview(await api<Preview>('preview', 'POST', result.data));
       else {
-        await api(rule ? `rules/${rule.id}` : 'rules', rule ? 'PUT' : 'POST', valid);
+        await api(rule ? `rules/${rule.id}` : 'rules', rule ? 'PUT' : 'POST', result.data);
         await onSaved();
         onClose();
       }
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Request failed.');
+      setError(e instanceof Error ? e.message : 'Unable to save. Try again.');
     } finally {
       setBusy(null);
     }
   }
-  const fieldError = (field: string) =>
-    errors[field] && (
-      <span className="field-error" id={`${field}-error`}>
-        {errors[field]}
-      </span>
-    );
   return (
     <dialog
       className="editor-dialog"
       ref={dialog}
+      aria-labelledby="editor-title"
       onCancel={(e) => {
         if (busy) e.preventDefault();
         else onClose();
       }}
-      aria-labelledby="editor-title"
     >
       <form
         noValidate
@@ -160,13 +129,7 @@ export function RuleEditor({
         }}
       >
         <div className="editor-header">
-          <div>
-            <span className="eyebrow">RULE SETUP</span>
-            <h2 id="editor-title">
-              {rule ? 'Edit notification rule' : 'Create notification rule'}
-            </h2>
-            <p>A useful heads-up, exactly when it matters.</p>
-          </div>
+          <h2 id="editor-title">{rule ? 'Edit rule' : 'Create rule'}</h2>
           <button
             type="button"
             className="icon-button"
@@ -180,52 +143,32 @@ export function RuleEditor({
         <div className="editor-body">
           <fieldset className="editor-fields" disabled={!!busy}>
             <div className="field">
-              <label htmlFor="rule-name">Rule name</label>
-              <input
-                id="rule-name"
-                value={draft.name}
-                placeholder="e.g. Billing needs a hand"
-                maxLength={80}
-                onChange={(e) => change({ name: e.target.value })}
-                aria-invalid={!!errors.name}
-                aria-describedby={errors.name ? 'name-error' : undefined}
-              />
-              {fieldError('name')}
-            </div>
-            <fieldset>
-              <legend>What should we watch?</legend>
-              <div className="template-options">
+              <label htmlFor="rule-kind">Notify when</label>
+              <select
+                id="rule-kind"
+                value={draft.kind}
+                onChange={(e) => {
+                  const kind = e.target.value as Kind;
+                  change({ kind, threshold: kind === 'sla' ? null : kind === 'backlog' ? 20 : 10 });
+                }}
+              >
                 {Object.entries(templates).map(([kind, t]) => (
-                  <button
-                    type="button"
-                    key={kind}
-                    className={`template-option ${draft.kind === kind ? 'selected' : ''}`}
-                    aria-pressed={draft.kind === kind}
-                    onClick={() =>
-                      change({
-                        kind: kind as Kind,
-                        threshold: kind === 'sla' ? null : kind === 'backlog' ? 20 : 10,
-                      })
-                    }
-                  >
-                    <span className={`template-icon ${t.color}`}>
-                      <t.Icon size={18} />
-                    </span>
-                    <span>
-                      <strong>{t.label}</strong>
-                      <small>{t.description}</small>
-                    </span>
-                    {draft.kind === kind && <Check className="selection-check" size={17} />}
-                  </button>
+                  <option key={kind} value={kind}>
+                    {t.label}
+                  </option>
                 ))}
-              </div>
-            </fieldset>
+              </select>
+              {draft.kind === 'sla' && (
+                <span className="help">SLA is the queue’s promised response time.</span>
+              )}
+              {draft.kind === 'adherence' && (
+                <span className="help">Adherence means doing what’s on the schedule.</span>
+              )}
+            </div>
             {draft.kind !== 'sla' && (
               <div className="field">
                 <label htmlFor="threshold">
-                  {draft.kind === 'backlog'
-                    ? 'More than this many tickets waiting'
-                    : 'Out of adherence for at least'}
+                  {draft.kind === 'backlog' ? 'More than' : 'For at least'}
                 </label>
                 <div className="input-unit">
                   <input
@@ -243,16 +186,18 @@ export function RuleEditor({
                   />
                   <span>{draft.kind === 'backlog' ? 'tickets' : 'minutes'}</span>
                 </div>
-                {fieldError('threshold')}
+                {errors.threshold && (
+                  <span id="threshold-error" className="field-error">
+                    {errors.threshold}
+                  </span>
+                )}
               </div>
             )}
             <fieldset
               aria-invalid={!!errors.queueIds}
-              aria-describedby={errors.queueIds ? 'queueIds-error' : 'scope-help'}
+              aria-describedby={errors.queueIds ? 'queue-error' : undefined}
             >
-              <legend>
-                {draft.kind === 'adherence' ? 'Agents in these queues' : 'Queues to watch'}
-              </legend>
+              <legend>{draft.kind === 'adherence' ? 'For agents in' : 'In these queues'}</legend>
               <div className="queue-options">
                 {queueOptions.map((q) => (
                   <label key={q} className={draft.queueIds.includes(q) ? 'checked' : ''}>
@@ -271,130 +216,102 @@ export function RuleEditor({
                   </label>
                 ))}
               </div>
-              {fieldError('queueIds')}
-              <p className="help" id="scope-help">
-                {draft.kind === 'adherence'
-                  ? 'Each agent gets a separate incident, even across multiple queues.'
-                  : 'Each queue gets a separate incident.'}
-              </p>
-            </fieldset>
-            <div className="field">
-              <label htmlFor="recipient">Notify</label>
-              <select
-                id="recipient"
-                value={draft.recipientId}
-                onChange={(e) =>
-                  change({ recipientId: e.target.value as RuleInput['recipientId'] })
-                }
-              >
-                {recipients.map((r) => (
-                  <option key={r.id} value={r.id}>
-                    {r.name} · {r.role}
-                  </option>
-                ))}
-              </select>
-              <span className="help">Demo recipients. All deliveries stay inside this app.</span>
-            </div>
-            <fieldset>
-              <legend>Delivery channel</legend>
-              <div className="channel-options">
-                <label>
-                  <input
-                    type="radio"
-                    name="channel"
-                    value="slack"
-                    checked={draft.channel === 'slack'}
-                    onChange={() => change({ channel: 'slack' })}
-                  />
-                  <span>
-                    Slack <small>Stub</small>
-                  </span>
-                </label>
-                <label>
-                  <input
-                    type="radio"
-                    name="channel"
-                    value="in_app"
-                    checked={draft.channel === 'in_app'}
-                    onChange={() => change({ channel: 'in_app' })}
-                  />
-                  <span>In-app inbox</span>
-                </label>
-              </div>
-            </fieldset>
-            <div className="rule-summary">
-              <Bell size={18} />
-              <div>
-                <strong>Your rule, in plain English</strong>
-                <p>{describe(draft)}</p>
-                <small>One alert per incident. A fresh healthy observation resolves it.</small>
-              </div>
-            </div>
-            {rule && (
-              <p className="help">
-                Saving closes current incidents for this rule. The updated rule starts with the next
-                fresh observation.
-              </p>
-            )}
-            <section className="preview-section" aria-label="Sample preview">
-              <div>
-                <div>
-                  <Sparkles size={17} />
-                  <strong>Try it on the sample morning</strong>
-                </div>
-                <button
-                  className="button secondary small"
-                  type="button"
-                  disabled={!!busy}
-                  onClick={() => void submit('preview')}
-                >
-                  {busy === 'preview' ? (
-                    <LoaderCircle size={15} className="spin" />
-                  ) : (
-                    <ArrowRight size={15} />
-                  )}
-                  Preview rule
-                </button>
-              </div>
-              <p className="help">
-                Replays all 96 sample events in isolation. No notifications are sent.
-              </p>
-              {preview && (
-                <div className="preview-results" aria-live="polite">
-                  <strong>
-                    {preview.notifications.length}{' '}
-                    {preview.notifications.length === 1 ? 'alert' : 'alerts'} would fire
-                  </strong>
-                  {preview.notifications.length === 0 && (
-                    <p>
-                      No observations crossed this threshold. Try a different queue or threshold.
-                    </p>
-                  )}
-                  {[...preview.notifications].reverse().map((n) => (
-                    <div key={n.id}>
-                      <Clock3 size={14} />
-                      <span>
-                        {time(n.eventTime)} UTC · {entityName(n.entityId)}
-                        <small>{n.evidence.message}</small>
-                      </span>
-                    </div>
-                  ))}
-                </div>
+              {errors.queueIds && (
+                <p id="queue-error" className="field-error">
+                  {errors.queueIds}
+                </p>
               )}
-            </section>
-            {(error || Object.keys(errors).length > 0) && (
+            </fieldset>
+            <div className="form-row">
+              <div className="field">
+                <label htmlFor="recipient">Send to</label>
+                <select
+                  id="recipient"
+                  value={draft.recipientId}
+                  onChange={(e) =>
+                    change({ recipientId: e.target.value as RuleInput['recipientId'] })
+                  }
+                >
+                  {recipients.map((r) => (
+                    <option key={r.id} value={r.id}>
+                      {r.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              <div className="field">
+                <label htmlFor="channel">Via</label>
+                <select
+                  id="channel"
+                  value={draft.channel}
+                  onChange={(e) => change({ channel: e.target.value as RuleInput['channel'] })}
+                >
+                  <option value="slack">Slack</option>
+                  <option value="in_app">In-app</option>
+                </select>
+              </div>
+            </div>
+            <details className="name-settings" open={rule ? true : undefined}>
+              <summary aria-label="Custom rule name">
+                Rule name <span>Optional</span>
+              </summary>
+              <div className="field">
+                <label className="sr-only" htmlFor="rule-name">
+                  Rule name
+                </label>
+                <input
+                  id="rule-name"
+                  value={draft.name}
+                  placeholder={suggestedName(draft)}
+                  maxLength={80}
+                  onChange={(e) => change({ name: e.target.value })}
+                  aria-invalid={!!errors.name}
+                />
+                {errors.name && <span className="field-error">{errors.name}</span>}
+              </div>
+            </details>
+            <div className="editor-note">
+              <Check size={16} />
+              <span>One alert per issue. We’ll update it until things recover.</span>
+            </div>
+            {rule && <p className="help">Saving restarts this rule with the next update.</p>}
+            {preview && (
+              <section className="preview-results" aria-live="polite">
+                <strong>
+                  {preview.notifications.length}{' '}
+                  {preview.notifications.length === 1 ? 'alert' : 'alerts'} in the sample morning
+                </strong>
+                {preview.notifications.length === 0 && (
+                  <p>No matching conditions in this sample.</p>
+                )}
+                {[...preview.notifications].reverse().map((n) => (
+                  <div key={n.id}>
+                    <Clock3 size={14} />
+                    <span>
+                      {time(n.eventTime)} UTC · {entityName(n.entityId)}
+                    </span>
+                  </div>
+                ))}
+              </section>
+            )}
+            {error && (
               <p role="alert" className="error-banner">
-                {error || 'Check the highlighted fields before continuing.'}
+                {error}
               </p>
             )}
           </fieldset>
         </div>
         <div className="editor-footer">
-          <button type="button" className="button secondary" onClick={onClose} disabled={!!busy}>
-            Cancel
+          <button
+            className="button secondary"
+            type="button"
+            disabled={!!busy}
+            onClick={() => void submit('preview')}
+          >
+            {busy === 'preview' && <LoaderCircle className="spin" size={16} />}Test with sample
           </button>
           <button className="button primary" type="submit" disabled={!!busy}>
-            {busy === 'save' ? <LoaderCircle size={17} className="spin" /> : <Check size={17} />}
+            {busy === 'save' && <LoaderCircle className="spin" size={16} />}
             {rule ? 'Save changes' : 'Create rule'}
           </button>
         </div>

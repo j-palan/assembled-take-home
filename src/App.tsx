@@ -3,24 +3,14 @@ import {
   Activity,
   ArrowRight,
   Bell,
-  BookOpen,
   Check,
-  CheckCheck,
   ChevronDown,
-  ChevronRight,
-  CircleHelp,
-  Clock3,
-  Code2,
-  FileJson2,
-  Layers3,
   LoaderCircle,
   Pause,
   Play,
   Plus,
-  Radio,
   RotateCcw,
   Settings2,
-  ShieldCheck,
   SkipForward,
   X,
 } from 'lucide-react';
@@ -30,29 +20,12 @@ import { RuleEditor } from './RuleEditor';
 import { RuleCard } from './RuleCard';
 import { ActivityInbox } from './ActivityInbox';
 import { ProcessingLog } from './ProcessingLog';
-import { Metric, EmptyState, Confirmation } from './ui';
+import { EmptyState, Confirmation } from './ui';
 
 type Page = 'rules' | 'activity' | 'processing';
-const pages = {
-  rules: {
-    label: 'Notification rules',
-    description: 'The right heads-up. For the right person. At the right time.',
-    Icon: Settings2,
-  },
-  activity: {
-    label: 'Activity inbox',
-    description: 'Every alert has a reason. See the evidence and who received it.',
-    Icon: Bell,
-  },
-  processing: {
-    label: 'Processing log',
-    description: 'A transparent record of what was processed, skipped, or needs attention.',
-    Icon: Code2,
-  },
-};
 function initialPage(): Page {
   const hash = window.location.hash.slice(1);
-  return Object.hasOwn(pages, hash) ? (hash as Page) : 'rules';
+  return hash === 'activity' || hash === 'processing' ? hash : 'rules';
 }
 
 export function App() {
@@ -74,9 +47,7 @@ export function App() {
       setData(await api<AppState>('state'));
       setConnectionError('');
     } catch {
-      setConnectionError(
-        'Unable to connect. Displaying the last received state; retrying automatically.',
-      );
+      setConnectionError('Connection lost. Retrying…');
     }
   }, []);
   useEffect(() => {
@@ -99,11 +70,35 @@ export function App() {
     return () => window.removeEventListener('hashchange', change);
   }, []);
   useEffect(() => {
-    document.title = `Intraday · ${pages[page].label}`;
+    const dismiss = (event: PointerEvent | KeyboardEvent) => {
+      if (
+        event instanceof KeyboardEvent &&
+        (event.key !== 'Escape' || document.querySelector('dialog[open]'))
+      )
+        return;
+      document.querySelectorAll<HTMLDetailsElement>('details[data-menu][open]').forEach((menu) => {
+        if (
+          event instanceof KeyboardEvent ||
+          (event.target instanceof Node && !menu.contains(event.target))
+        ) {
+          menu.open = false;
+          if (event instanceof KeyboardEvent) menu.querySelector('summary')?.focus();
+        }
+      });
+    };
+    document.addEventListener('pointerdown', dismiss);
+    document.addEventListener('keydown', dismiss);
+    return () => {
+      document.removeEventListener('pointerdown', dismiss);
+      document.removeEventListener('keydown', dismiss);
+    };
+  }, []);
+  useEffect(() => {
+    document.title = `Intraday · ${page === 'rules' ? 'Rules' : page === 'activity' ? 'Activity' : 'Event log'}`;
   }, [page]);
   useEffect(() => {
     if (!notice) return;
-    const timer = setTimeout(() => setNotice(''), 4500);
+    const timer = setTimeout(() => setNotice(''), 3500);
     return () => clearTimeout(timer);
   }, [notice]);
   async function run(action: () => Promise<unknown>, message?: string) {
@@ -113,369 +108,270 @@ export function App() {
       await action();
       await refresh();
       if (message) setNotice(message);
+      return true;
     } catch (e) {
-      setError(e instanceof Error ? e.message : 'Unable to complete action.');
+      setError(e instanceof Error ? e.message : 'Something went wrong. Try again.');
+      return false;
     } finally {
       setBusy(false);
     }
   }
   const control = (action: string, rate?: number) =>
     run(() => api('replay', 'POST', { action, ...(rate ? { rate } : {}) }));
-  const toggle = (rule: Rule) => {
+  const reset = () =>
+    setConfirmation({
+      title: 'Reset the demo?',
+      text: 'Clear sample activity and start again. Your rules will stay.',
+      label: 'Reset demo',
+      action: async () => {
+        await control('reset');
+      },
+    });
+  function toggle(rule: Rule) {
     const { id, revision, createdAt, ...input } = rule;
     void run(
       () => api(`rules/${id}`, 'PUT', { ...input, enabled: !rule.enabled }),
-      rule.enabled
-        ? 'Rule paused. Existing incidents were closed.'
-        : 'Rule enabled. Watching for fresh observations.',
+      rule.enabled ? 'Rule paused' : 'Rule enabled',
     );
-  };
+  }
+  const complete = !!data && data.replay.cursor === data.replay.total;
   const active = data?.incidents.filter((i) => i.status === 'active').length ?? 0;
-  const issues =
-    data?.stats
-      .filter((s) => ['invalid', 'conflict', 'stale', 'unknown'].includes(s.outcome))
-      .reduce((n, s) => n + s.count, 0) ?? 0;
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main">
         Skip to content
       </a>
-      <aside className="sidebar">
-        <a href="#rules" className="brand" aria-label="Intraday home">
-          <span className="brand-mark">
-            <Activity size={23} strokeWidth={2.3} />
-          </span>
-          <span>
-            intraday<span className="brand-dot">.</span>
-          </span>
-        </a>
-        <div className="workspace">
-          <span className="workspace-icon">
-            <Layers3 size={17} />
-          </span>
-          <span>
-            <strong>Support operations</strong>
-            <small>Demo workspace</small>
-          </span>
-          <ChevronDown size={15} />
-        </div>
-        <span className="nav-label">WORKSPACE</span>
-        <nav aria-label="Main navigation">
-          {Object.entries(pages).map(([key, p]) => (
-            <a
-              key={key}
-              className={page === key ? 'nav-item active' : 'nav-item'}
-              href={`#${key}`}
-              aria-current={page === key ? 'page' : undefined}
-              aria-label={key === 'rules' ? 'Rules' : p.label}
-            >
-              <p.Icon size={18} />
-              <span>
-                {key === 'rules'
-                  ? 'Rules'
-                  : key === 'activity'
-                    ? 'Activity inbox'
-                    : 'Processing log'}
-              </span>
-              {key === 'activity' && !!data?.notifications.length && (
-                <span className="nav-count">{data.notifications.length}</span>
-              )}
-              {key === 'processing' && issues > 0 && (
-                <span className="nav-count muted-count">{issues}</span>
-              )}
-            </a>
-          ))}
-        </nav>
-        <div className="sidebar-note">
-          <ShieldCheck size={21} />
-          <strong>Built to keep things quiet.</strong>
-          <p>
-            One alert per incident.
-            <br />
-            No repeat pings while it’s active.
-          </p>
-          <a href="#activity">
-            See what’s happening <ArrowRight size={14} />
-          </a>
-        </div>
-        <div className="sidebar-person">
-          <span className="avatar">MC</span>
-          <span>
-            <strong>Maya Chen</strong>
-            <small>Team lead · demo persona</small>
-          </span>
-        </div>
-      </aside>
-      <div className="main-shell">
-        <header className="topbar">
-          <span>
-            <Layers3 size={16} />
-            Workspace <ChevronRight size={14} />
-            <strong>{pages[page].label}</strong>
-          </span>
-          <div className="topbar-right">
-            <span className="demo-badge">
-              <span />
-              SAMPLE DATA
+      <header className="app-header">
+        <div className="header-inner">
+          <a href="#rules" className="brand" aria-label="Intraday home">
+            <span className="brand-mark">
+              <Activity size={22} />
             </span>
-            <details className="help-menu">
-              <summary aria-label="About this demo">
-                <CircleHelp size={19} />
-              </summary>
-              <div>
-                <strong>A morning in support</strong>
-                <p>
-                  Replay May 26, 2026, from 09:00–10:30 UTC. The clock follows event time; events
-                  arrive in file order.
-                </p>
-                <p>All delivery channels are local stubs. No real messages leave this app.</p>
-                <p>Alerts evaluate on fresh observations. Silence does not imply recovery.</p>
-              </div>
-            </details>
+            intraday<span className="brand-dot">.</span>
+          </a>
+          <span className="workspace-label">
+            Support operations <span className="demo-badge">Demo</span>
+          </span>
+        </div>
+      </header>
+      <main id="main" tabIndex={-1}>
+        <div className="page-heading">
+          <div>
+            <h1>Notifications</h1>
+            <p>Choose when your team gets a heads-up.</p>
           </div>
-        </header>
-        <main id="main" tabIndex={-1}>
-          <div className="page-heading">
-            <div>
-              <span className="eyebrow">STAY AHEAD OF THE DAY</span>
-              <h1>{pages[page].label}</h1>
-              <p>{pages[page].description}</p>
-            </div>
-            <button className="button primary" onClick={() => setEditor('new')}>
-              <Plus size={18} />
-              Create rule
+          <button className="button primary" onClick={() => setEditor('new')}>
+            <Plus size={18} />
+            Create rule
+          </button>
+        </div>
+        <nav className="page-tabs" aria-label="Main navigation">
+          <a href="#rules" aria-current={page === 'rules' ? 'page' : undefined}>
+            <Settings2 size={17} />
+            Rules <span>{data?.rules.length ?? 0}</span>
+          </a>
+          <a href="#activity" aria-current={page === 'activity' ? 'page' : undefined}>
+            <Bell size={17} />
+            Activity <span>{data?.notifications.length ?? 0}</span>
+          </a>
+          {page === 'processing' && (
+            <a href="#processing" aria-current="page">
+              Event log
+            </a>
+          )}
+        </nav>
+        {connectionError && (
+          <p role="alert" className="error-banner">
+            {connectionError}
+          </p>
+        )}
+        {error && (
+          <div role="alert" className="error-banner">
+            {error}
+            <button className="icon-button" aria-label="Dismiss error" onClick={() => setError('')}>
+              <X size={17} />
             </button>
           </div>
-          {connectionError && (
-            <div role="alert" className="error-banner">
-              {connectionError}
-            </div>
-          )}
-          {error && (
-            <div role="alert" className="error-banner">
-              {error}
-              <button
-                className="icon-button"
-                aria-label="Dismiss error"
-                onClick={() => setError('')}
-              >
-                <X size={16} />
-              </button>
-            </div>
-          )}
-          {!data ? (
-            <div className="loading-state" role="status">
-              <LoaderCircle className="spin" />
-              Loading your workspace…
-            </div>
-          ) : (
-            <>
-              <div className="metrics">
-                <Metric
-                  label="Enabled rules"
-                  value={data.rules.filter((r) => r.enabled).length}
-                  suffix={`of ${data.rules.length} configured`}
-                  Icon={Settings2}
-                />
-                <Metric
-                  label="Active incidents"
-                  value={active}
-                  suffix="based on latest observations"
-                  Icon={Radio}
-                />
-                <Metric
-                  label="Notifications delivered"
-                  value={data.notifications.filter((n) => n.deliveredAt).length}
-                  suffix="through local delivery stubs"
-                  Icon={CheckCheck}
-                />
-              </div>
-              <section className="replay-panel" aria-label="Sample replay">
-                <div className="replay-info">
-                  <span className="replay-icon">
-                    <FileJson2 size={23} />
-                  </span>
-                  <div>
-                    <div className="replay-title">
-                      <strong>A busy morning, on replay</strong>
-                      <span className="pill neutral">96 events</span>
-                    </div>
-                    <p>
-                      3 queues · 8 agents · May 26, 2026 <span className="utc-note">· UTC</span>
-                    </p>
-                  </div>
-                </div>
-                <div className="replay-controls">
-                  <div className="replay-clock">
-                    <Clock3 size={15} />
-                    <strong>{time(data.replay.time)}</strong>
-                    <span>UTC</span>
-                  </div>
-                  <select
-                    aria-label="Replay speed"
-                    value={data.replay.rate}
-                    disabled={busy}
-                    onChange={(e) => void control('speed', Number(e.target.value))}
-                  >
-                    {[2, 4, 12].map((r) => (
-                      <option key={r} value={r}>
-                        {r} events/sec
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    className="button secondary small"
-                    disabled={busy || data.replay.cursor === data.replay.total}
-                    onClick={() => void control(data.replay.playing ? 'pause' : 'play')}
-                  >
-                    {data.replay.playing ? <Pause size={15} /> : <Play size={15} />}
-                    {data.replay.playing
-                      ? 'Pause'
-                      : data.replay.cursor === data.replay.total
-                        ? 'Complete'
-                        : data.replay.cursor
-                          ? 'Resume'
-                          : 'Play sample'}
-                  </button>
-                  <button
-                    className="icon-button"
-                    aria-label="Process next event"
-                    title="Process next event"
-                    disabled={busy || data.replay.cursor === data.replay.total}
-                    onClick={() => void control('step')}
-                  >
-                    <SkipForward size={17} />
-                  </button>
-                  <button
-                    className="icon-button"
-                    aria-label="Reset sample"
-                    title="Reset history, keep rules"
-                    disabled={busy || data.replay.cursor === 0}
-                    onClick={() =>
-                      setConfirmation({
-                        title: 'Reset the sample morning?',
-                        text: 'This clears all event history, incidents, and notifications. Your configured rules are kept, ready for another replay.',
-                        label: 'Reset sample',
-                        action: async () => {
-                          await control('reset');
-                        },
-                      })
-                    }
-                  >
-                    <RotateCcw size={16} />
-                  </button>
-                </div>
-                <div
-                  className="replay-progress"
-                  role="progressbar"
-                  aria-label="Sample events processed"
-                  aria-valuenow={data.replay.cursor}
-                  aria-valuemin={0}
-                  aria-valuemax={data.replay.total}
-                >
-                  <span style={{ width: `${(data.replay.cursor / data.replay.total) * 100}%` }} />
-                </div>
-                <div className="replay-caption">
-                  <span>
-                    <span className={`status-dot ${data.replay.playing ? 'live' : ''}`} />
-                    {data.replay.playing
-                      ? 'Replaying in arrival order'
-                      : data.replay.cursor === data.replay.total
-                        ? 'Replay complete · latest observations shown'
-                        : 'Paused · ready when you are'}
-                  </span>
-                  <span>
-                    {data.replay.cursor} / {data.replay.total} processed{' '}
-                    <button
-                      className="text-button"
-                      disabled={busy || data.replay.cursor === data.replay.total}
-                      onClick={() => void control('finish')}
-                    >
-                      Run to end <ArrowRight size={13} />
-                    </button>
-                  </span>
-                </div>
-                {data.replay.error && (
-                  <p role="alert" className="error-banner">
-                    {data.replay.error}
+        )}
+        {!data ? (
+          <div className="loading-state" role="status">
+            <LoaderCircle className="spin" />
+            Loading…
+          </div>
+        ) : (
+          <>
+            <section className="demo-panel" aria-label="Sample replay">
+              <div className="demo-main">
+                <span className="demo-icon">
+                  <Play size={19} />
+                </span>
+                <div className="demo-copy">
+                  <strong>
+                    {complete
+                      ? 'Demo complete'
+                      : data.replay.playing
+                        ? 'Playing the sample morning…'
+                        : 'See your rules in action'}
+                  </strong>
+                  <p>
+                    {complete
+                      ? `${data.notifications.length} alerts · ${active} still active`
+                      : 'Try a sample morning with 3 queues and 8 agents.'}
                   </p>
-                )}
-              </section>
-              {page === 'rules' && (
-                <>
-                  <div className="section-heading">
-                    <div>
-                      <h2>
-                        Your rules <span className="number-badge">{data.rules.length}</span>
-                      </h2>
-                      <p>Watch what matters. We’ll handle the heads-up.</p>
+                </div>
+                <div className="demo-actions">
+                  {complete ? (
+                    <button className="button secondary" onClick={reset} disabled={busy}>
+                      <RotateCcw size={15} />
+                      Reset demo
+                    </button>
+                  ) : (
+                    <button
+                      className="button secondary"
+                      disabled={busy}
+                      onClick={async () => {
+                        if (await control('finish')) window.location.hash = 'activity';
+                      }}
+                    >
+                      {busy ? <LoaderCircle size={16} className="spin" /> : <Play size={16} />}Run
+                      demo
+                    </button>
+                  )}
+                  <details className="demo-options" data-menu>
+                    <summary aria-label="Replay controls">
+                      <ChevronDown size={18} />
+                    </summary>
+                    <div className="demo-options-content">
+                      <strong>Replay controls</strong>
+                      <p>May 26 · 09:00–10:30 UTC</p>
+                      <div className="replay-clock">
+                        {time(data.replay.time)} UTC{' '}
+                        <small>
+                          {data.replay.cursor}/{data.replay.total} events
+                        </small>
+                      </div>
+                      <div className="replay-controls">
+                        <button
+                          className="button secondary"
+                          disabled={busy || complete}
+                          onClick={() => void control(data.replay.playing ? 'pause' : 'play')}
+                        >
+                          {data.replay.playing ? <Pause size={15} /> : <Play size={15} />}
+                          {data.replay.playing
+                            ? 'Pause'
+                            : data.replay.cursor
+                              ? 'Resume'
+                              : 'Play sample'}
+                        </button>
+                        <button
+                          className="icon-button"
+                          aria-label="Process next event"
+                          disabled={busy || complete}
+                          onClick={() => void control('step')}
+                        >
+                          <SkipForward size={18} />
+                        </button>
+                        <select
+                          aria-label="Replay speed"
+                          value={data.replay.rate}
+                          onChange={(e) => void control('speed', Number(e.target.value))}
+                          disabled={busy}
+                        >
+                          {[2, 4, 12].map((r) => (
+                            <option key={r} value={r}>
+                              {r} events/sec
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+                      <button
+                        className="text-button"
+                        onClick={reset}
+                        disabled={busy || data.replay.cursor === 0}
+                      >
+                        Reset sample history
+                      </button>
+                      <a
+                        href="#processing"
+                        onClick={(e) => e.currentTarget.closest('details')?.removeAttribute('open')}
+                      >
+                        View event log <ArrowRight size={14} />
+                      </a>
                     </div>
-                    <span className="subtle-label">
-                      <ShieldCheck size={14} />
-                      One alert per incident
-                    </span>
-                  </div>
-                  <div className="rule-list">
-                    {data.rules.map((rule) => (
-                      <RuleCard
-                        key={rule.id}
-                        rule={rule}
-                        active={
-                          data.incidents.filter(
-                            (i) => i.ruleId === rule.id && i.status === 'active',
-                          ).length
-                        }
-                        disabled={busy}
-                        toggle={() => toggle(rule)}
-                        edit={() => setEditor(rule)}
-                        remove={() =>
-                          setConfirmation({
-                            title: `Delete “${rule.name}”?`,
-                            text: 'This stops future alerts and closes active incidents for this rule. Historical notifications will remain in your inbox.',
-                            label: 'Delete rule',
-                            action: async () => {
-                              await run(() => api(`rules/${rule.id}`, 'DELETE'), 'Rule deleted.');
-                            },
-                          })
-                        }
-                      />
-                    ))}
-                    {data.rules.length === 0 && (
-                      <EmptyState
-                        Icon={Settings2}
-                        title="Make your first rule"
-                        text="Choose what to watch and who should get the heads-up."
-                        action={
-                          <button className="button primary" onClick={() => setEditor('new')}>
-                            <Plus size={17} />
-                            Create rule
-                          </button>
-                        }
-                      />
-                    )}
-                  </div>
-                  <div className="bottom-tip">
-                    <BookOpen size={18} />
-                    <p>
-                      <strong>A little signal goes a long way.</strong> Start with the conditions
-                      your team can act on. Add more rules as you learn what’s useful.
-                    </p>
-                  </div>
-                </>
+                  </details>
+                </div>
+              </div>
+              <div
+                className="demo-progress"
+                role="progressbar"
+                aria-label="Sample events processed"
+                aria-valuenow={data.replay.cursor}
+                aria-valuemin={0}
+                aria-valuemax={data.replay.total}
+              >
+                <span style={{ width: `${(data.replay.cursor / data.replay.total) * 100}%` }} />
+              </div>
+              {data.replay.error && (
+                <p role="alert" className="error-banner">
+                  {data.replay.error}
+                </p>
               )}
-              {page === 'activity' && <ActivityInbox data={data} />}
-              {page === 'processing' && <ProcessingLog data={data} />}
-            </>
-          )}
-          <footer className="page-footer">
-            <span>
-              <Activity size={14} />
-              Intraday notifications
-            </span>
-            <span>Demo workspace · All times in UTC · Local delivery only</span>
-          </footer>
-        </main>
-      </div>
+            </section>
+            {page === 'rules' && (
+              <section aria-label="Notification rules">
+                <div className="list-heading">
+                  <span>{data.rules.filter((r) => r.enabled).length} rules enabled</span>
+                  <span>One alert per issue. No repeat pings.</span>
+                </div>
+                <div className="rule-list">
+                  {data.rules.map((rule) => (
+                    <RuleCard
+                      key={rule.id}
+                      rule={rule}
+                      active={
+                        data.incidents.filter((i) => i.ruleId === rule.id && i.status === 'active')
+                          .length
+                      }
+                      disabled={busy}
+                      toggle={() => toggle(rule)}
+                      edit={() => setEditor(rule)}
+                      remove={() =>
+                        setConfirmation({
+                          title: 'Delete this rule?',
+                          text: `“${rule.name}” will stop sending alerts. Past notifications will stay.`,
+                          label: 'Delete rule',
+                          action: async () => {
+                            await run(() => api(`rules/${rule.id}`, 'DELETE'), 'Rule deleted');
+                          },
+                        })
+                      }
+                    />
+                  ))}
+                  {data.rules.length === 0 && (
+                    <EmptyState
+                      Icon={Settings2}
+                      title="What should we watch?"
+                      text="Create a rule to let your team know when something needs attention."
+                      action={
+                        <button className="button primary" onClick={() => setEditor('new')}>
+                          <Plus size={17} />
+                          Create rule
+                        </button>
+                      }
+                    />
+                  )}
+                </div>
+              </section>
+            )}
+            {page === 'activity' && <ActivityInbox data={data} />}
+            {page === 'processing' && <ProcessingLog data={data} />}
+          </>
+        )}
+        <footer className="page-footer">
+          <span>Demo only · No messages leave this app.</span>
+          <span>All times in UTC</span>
+        </footer>
+      </main>
       {notice && (
         <div role="status" className="toast">
           <Check size={17} />
@@ -488,11 +384,7 @@ export function App() {
           onClose={() => setEditor(null)}
           onSaved={async () => {
             await refresh();
-            setNotice(
-              editor === 'new'
-                ? 'Rule created. Watching for fresh observations.'
-                : 'Rule updated. Watching for fresh observations.',
-            );
+            setNotice(editor === 'new' ? 'Rule created' : 'Changes saved');
           }}
         />
       )}
