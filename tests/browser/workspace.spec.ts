@@ -16,7 +16,12 @@ test('configure and preview a rule, replay, inspect routed evidence, then edit a
   await editor.getByLabel('Rule name').fill('Tier 2 SLA watch');
   await editor.getByLabel('Billing', { exact: true }).uncheck();
   await editor.getByLabel('Tier 2', { exact: true }).check();
+  await page.route('**/api/preview', async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 250));
+    await route.continue();
+  });
   await editor.getByRole('button', { name: 'Preview rule' }).click();
+  await expect(editor.getByLabel('Rule name')).toBeDisabled();
   await expect(editor.getByText('1 alert would fire')).toBeVisible();
   await expect(editor.getByText(/10:00:00 UTC/)).toBeVisible();
   await page.screenshot({ path: 'test-results/rule-preview.png', fullPage: true });
@@ -32,6 +37,13 @@ test('configure and preview a rule, replay, inspect routed evidence, then edit a
   await expect(page.getByRole('button', { name: 'Resume', exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Run to end' }).click();
   await expect(page.getByRole('progressbar')).toHaveAttribute('aria-valuenow', '96');
+  const finalState = await (await page.request.get('/api/state')).json();
+  expect(finalState.stats).toEqual([
+    { outcome: 'accepted', count: 93 },
+    { outcome: 'conflict', count: 1 },
+    { outcome: 'stale', count: 1 },
+    { outcome: 'unknown', count: 1 },
+  ]);
   await page.getByRole('link', { name: /Activity inbox/ }).click();
   await expect(page.getByRole('heading', { name: 'Notification history' })).toContainText('5');
   await page.getByRole('button', { name: /Tier 2 SLA watch/ }).click();
@@ -83,6 +95,8 @@ test('responsive layouts and keyboard-accessible modal work without horizontal o
     await page.screenshot({ path: `test-results/rules-${width}.png`, fullPage: true });
   }
   await page.setViewportSize({ width: 375, height: 812 });
+  await expect(page.getByRole('link', { name: 'Rules', exact: true })).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Activity inbox', exact: true })).toBeVisible();
   await page.emulateMedia({ reducedMotion: 'reduce' });
   await page.getByRole('button', { name: 'Create rule', exact: true }).click();
   await expect(page.getByLabel('Rule name')).toBeFocused();

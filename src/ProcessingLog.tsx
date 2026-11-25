@@ -73,8 +73,8 @@ export function ProcessingLog({ data }: { data: AppState }) {
         )}
       </div>
       <p className="help">
-        Showing up to 200 recent receipts. “Unknown evidence” means a violation was reported without
-        its start time; incident state is preserved.
+        Showing up to 200 recent receipts. “Unknown evidence” means duration or queue membership was
+        unavailable; incident state is preserved.
       </p>
     </>
   );

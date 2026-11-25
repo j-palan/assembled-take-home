@@ -167,6 +167,7 @@ export function App() {
               className={page === key ? 'nav-item active' : 'nav-item'}
               href={`#${key}`}
               aria-current={page === key ? 'page' : undefined}
+              aria-label={key === 'rules' ? 'Rules' : p.label}
             >
               <p.Icon size={18} />
               <span>

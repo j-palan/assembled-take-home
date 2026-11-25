@@ -109,6 +109,13 @@ export function RuleEditor({
       return result.data;
     }
     setErrors(Object.fromEntries(result.error.issues.map((i) => [i.path[0], i.message])));
+    requestAnimationFrame(() =>
+      dialog.current
+        ?.querySelector<HTMLElement>(
+          'input[aria-invalid="true"], fieldset[aria-invalid="true"] input',
+        )
+        ?.focus(),
+    );
     return null;
   }
   async function submit(mode: 'save' | 'preview') {
@@ -171,207 +178,216 @@ export function RuleEditor({
           </button>
         </div>
         <div className="editor-body">
-          <div className="field">
-            <label htmlFor="rule-name">Rule name</label>
-            <input
-              id="rule-name"
-              value={draft.name}
-              placeholder="e.g. Billing needs a hand"
-              maxLength={80}
-              onChange={(e) => change({ name: e.target.value })}
-              aria-invalid={!!errors.name}
-              aria-describedby={errors.name ? 'name-error' : undefined}
-            />
-            {fieldError('name')}
-          </div>
-          <fieldset>
-            <legend>What should we watch?</legend>
-            <div className="template-options">
-              {Object.entries(templates).map(([kind, t]) => (
-                <button
-                  type="button"
-                  key={kind}
-                  className={`template-option ${draft.kind === kind ? 'selected' : ''}`}
-                  aria-pressed={draft.kind === kind}
-                  onClick={() =>
-                    change({
-                      kind: kind as Kind,
-                      threshold: kind === 'sla' ? null : kind === 'backlog' ? 20 : 10,
-                    })
-                  }
-                >
-                  <span className={`template-icon ${t.color}`}>
-                    <t.Icon size={18} />
-                  </span>
-                  <span>
-                    <strong>{t.label}</strong>
-                    <small>{t.description}</small>
-                  </span>
-                  {draft.kind === kind && <Check className="selection-check" size={17} />}
-                </button>
-              ))}
-            </div>
-          </fieldset>
-          {draft.kind !== 'sla' && (
+          <fieldset className="editor-fields" disabled={!!busy}>
             <div className="field">
-              <label htmlFor="threshold">
-                {draft.kind === 'backlog'
-                  ? 'More than this many tickets waiting'
-                  : 'Out of adherence for at least'}
-              </label>
-              <div className="input-unit">
-                <input
-                  id="threshold"
-                  type="number"
-                  min="1"
-                  max="10000"
-                  step="1"
-                  value={draft.threshold ?? ''}
-                  onChange={(e) =>
-                    change({ threshold: e.target.value === '' ? null : Number(e.target.value) })
-                  }
-                  aria-invalid={!!errors.threshold}
-                  aria-describedby={errors.threshold ? 'threshold-error' : undefined}
-                />
-                <span>{draft.kind === 'backlog' ? 'tickets' : 'minutes'}</span>
-              </div>
-              {fieldError('threshold')}
+              <label htmlFor="rule-name">Rule name</label>
+              <input
+                id="rule-name"
+                value={draft.name}
+                placeholder="e.g. Billing needs a hand"
+                maxLength={80}
+                onChange={(e) => change({ name: e.target.value })}
+                aria-invalid={!!errors.name}
+                aria-describedby={errors.name ? 'name-error' : undefined}
+              />
+              {fieldError('name')}
             </div>
-          )}
-          <fieldset aria-describedby={errors.queueIds ? 'queueIds-error' : 'scope-help'}>
-            <legend>
-              {draft.kind === 'adherence' ? 'Agents in these queues' : 'Queues to watch'}
-            </legend>
-            <div className="queue-options">
-              {queueOptions.map((q) => (
-                <label key={q} className={draft.queueIds.includes(q) ? 'checked' : ''}>
-                  <input
-                    type="checkbox"
-                    checked={draft.queueIds.includes(q)}
-                    onChange={(e) =>
+            <fieldset>
+              <legend>What should we watch?</legend>
+              <div className="template-options">
+                {Object.entries(templates).map(([kind, t]) => (
+                  <button
+                    type="button"
+                    key={kind}
+                    className={`template-option ${draft.kind === kind ? 'selected' : ''}`}
+                    aria-pressed={draft.kind === kind}
+                    onClick={() =>
                       change({
-                        queueIds: e.target.checked
-                          ? [...draft.queueIds, q]
-                          : draft.queueIds.filter((x) => x !== q),
+                        kind: kind as Kind,
+                        threshold: kind === 'sla' ? null : kind === 'backlog' ? 20 : 10,
                       })
                     }
-                  />
-                  {queueName(q)}
-                </label>
-              ))}
-            </div>
-            {fieldError('queueIds')}
-            <p className="help" id="scope-help">
-              {draft.kind === 'adherence'
-                ? 'Each agent gets a separate incident, even across multiple queues.'
-                : 'Each queue gets a separate incident.'}
-            </p>
-          </fieldset>
-          <div className="field">
-            <label htmlFor="recipient">Notify</label>
-            <select
-              id="recipient"
-              value={draft.recipientId}
-              onChange={(e) => change({ recipientId: e.target.value as RuleInput['recipientId'] })}
-            >
-              {recipients.map((r) => (
-                <option key={r.id} value={r.id}>
-                  {r.name} · {r.role}
-                </option>
-              ))}
-            </select>
-            <span className="help">Demo recipients. All deliveries stay inside this app.</span>
-          </div>
-          <fieldset>
-            <legend>Delivery channel</legend>
-            <div className="channel-options">
-              <label>
-                <input
-                  type="radio"
-                  name="channel"
-                  value="slack"
-                  checked={draft.channel === 'slack'}
-                  onChange={() => change({ channel: 'slack' })}
-                />
-                <span>
-                  Slack <small>Stub</small>
-                </span>
-              </label>
-              <label>
-                <input
-                  type="radio"
-                  name="channel"
-                  value="in_app"
-                  checked={draft.channel === 'in_app'}
-                  onChange={() => change({ channel: 'in_app' })}
-                />
-                <span>In-app inbox</span>
-              </label>
-            </div>
-          </fieldset>
-          <div className="rule-summary">
-            <Bell size={18} />
-            <div>
-              <strong>Your rule, in plain English</strong>
-              <p>{describe(draft)}</p>
-              <small>One alert per incident. A fresh healthy observation resolves it.</small>
-            </div>
-          </div>
-          {rule && (
-            <p className="help">
-              Saving closes current incidents for this rule. The updated rule starts with the next
-              fresh observation.
-            </p>
-          )}
-          <section className="preview-section" aria-label="Sample preview">
-            <div>
-              <div>
-                <Sparkles size={17} />
-                <strong>Try it on the sample morning</strong>
-              </div>
-              <button
-                className="button secondary small"
-                type="button"
-                disabled={!!busy}
-                onClick={() => void submit('preview')}
-              >
-                {busy === 'preview' ? (
-                  <LoaderCircle size={15} className="spin" />
-                ) : (
-                  <ArrowRight size={15} />
-                )}
-                Preview rule
-              </button>
-            </div>
-            <p className="help">
-              Replays all 96 sample events in isolation. No notifications are sent.
-            </p>
-            {preview && (
-              <div className="preview-results" aria-live="polite">
-                <strong>
-                  {preview.notifications.length}{' '}
-                  {preview.notifications.length === 1 ? 'alert' : 'alerts'} would fire
-                </strong>
-                {preview.notifications.length === 0 && (
-                  <p>No observations crossed this threshold. Try a different queue or threshold.</p>
-                )}
-                {[...preview.notifications].reverse().map((n) => (
-                  <div key={n.id}>
-                    <Clock3 size={14} />
-                    <span>
-                      {time(n.eventTime)} UTC · {entityName(n.entityId)}
-                      <small>{n.evidence.message}</small>
+                  >
+                    <span className={`template-icon ${t.color}`}>
+                      <t.Icon size={18} />
                     </span>
-                  </div>
+                    <span>
+                      <strong>{t.label}</strong>
+                      <small>{t.description}</small>
+                    </span>
+                    {draft.kind === kind && <Check className="selection-check" size={17} />}
+                  </button>
                 ))}
               </div>
+            </fieldset>
+            {draft.kind !== 'sla' && (
+              <div className="field">
+                <label htmlFor="threshold">
+                  {draft.kind === 'backlog'
+                    ? 'More than this many tickets waiting'
+                    : 'Out of adherence for at least'}
+                </label>
+                <div className="input-unit">
+                  <input
+                    id="threshold"
+                    type="number"
+                    min="1"
+                    max="10000"
+                    step="1"
+                    value={draft.threshold ?? ''}
+                    onChange={(e) =>
+                      change({ threshold: e.target.value === '' ? null : Number(e.target.value) })
+                    }
+                    aria-invalid={!!errors.threshold}
+                    aria-describedby={errors.threshold ? 'threshold-error' : undefined}
+                  />
+                  <span>{draft.kind === 'backlog' ? 'tickets' : 'minutes'}</span>
+                </div>
+                {fieldError('threshold')}
+              </div>
             )}
-          </section>
-          {(error || Object.keys(errors).length > 0) && (
-            <p role="alert" className="error-banner">
-              {error || 'Check the highlighted fields before continuing.'}
-            </p>
-          )}
+            <fieldset
+              aria-invalid={!!errors.queueIds}
+              aria-describedby={errors.queueIds ? 'queueIds-error' : 'scope-help'}
+            >
+              <legend>
+                {draft.kind === 'adherence' ? 'Agents in these queues' : 'Queues to watch'}
+              </legend>
+              <div className="queue-options">
+                {queueOptions.map((q) => (
+                  <label key={q} className={draft.queueIds.includes(q) ? 'checked' : ''}>
+                    <input
+                      type="checkbox"
+                      checked={draft.queueIds.includes(q)}
+                      onChange={(e) =>
+                        change({
+                          queueIds: e.target.checked
+                            ? [...draft.queueIds, q]
+                            : draft.queueIds.filter((x) => x !== q),
+                        })
+                      }
+                    />
+                    {queueName(q)}
+                  </label>
+                ))}
+              </div>
+              {fieldError('queueIds')}
+              <p className="help" id="scope-help">
+                {draft.kind === 'adherence'
+                  ? 'Each agent gets a separate incident, even across multiple queues.'
+                  : 'Each queue gets a separate incident.'}
+              </p>
+            </fieldset>
+            <div className="field">
+              <label htmlFor="recipient">Notify</label>
+              <select
+                id="recipient"
+                value={draft.recipientId}
+                onChange={(e) =>
+                  change({ recipientId: e.target.value as RuleInput['recipientId'] })
+                }
+              >
+                {recipients.map((r) => (
+                  <option key={r.id} value={r.id}>
+                    {r.name} · {r.role}
+                  </option>
+                ))}
+              </select>
+              <span className="help">Demo recipients. All deliveries stay inside this app.</span>
+            </div>
+            <fieldset>
+              <legend>Delivery channel</legend>
+              <div className="channel-options">
+                <label>
+                  <input
+                    type="radio"
+                    name="channel"
+                    value="slack"
+                    checked={draft.channel === 'slack'}
+                    onChange={() => change({ channel: 'slack' })}
+                  />
+                  <span>
+                    Slack <small>Stub</small>
+                  </span>
+                </label>
+                <label>
+                  <input
+                    type="radio"
+                    name="channel"
+                    value="in_app"
+                    checked={draft.channel === 'in_app'}
+                    onChange={() => change({ channel: 'in_app' })}
+                  />
+                  <span>In-app inbox</span>
+                </label>
+              </div>
+            </fieldset>
+            <div className="rule-summary">
+              <Bell size={18} />
+              <div>
+                <strong>Your rule, in plain English</strong>
+                <p>{describe(draft)}</p>
+                <small>One alert per incident. A fresh healthy observation resolves it.</small>
+              </div>
+            </div>
+            {rule && (
+              <p className="help">
+                Saving closes current incidents for this rule. The updated rule starts with the next
+                fresh observation.
+              </p>
+            )}
+            <section className="preview-section" aria-label="Sample preview">
+              <div>
+                <div>
+                  <Sparkles size={17} />
+                  <strong>Try it on the sample morning</strong>
+                </div>
+                <button
+                  className="button secondary small"
+                  type="button"
+                  disabled={!!busy}
+                  onClick={() => void submit('preview')}
+                >
+                  {busy === 'preview' ? (
+                    <LoaderCircle size={15} className="spin" />
+                  ) : (
+                    <ArrowRight size={15} />
+                  )}
+                  Preview rule
+                </button>
+              </div>
+              <p className="help">
+                Replays all 96 sample events in isolation. No notifications are sent.
+              </p>
+              {preview && (
+                <div className="preview-results" aria-live="polite">
+                  <strong>
+                    {preview.notifications.length}{' '}
+                    {preview.notifications.length === 1 ? 'alert' : 'alerts'} would fire
+                  </strong>
+                  {preview.notifications.length === 0 && (
+                    <p>
+                      No observations crossed this threshold. Try a different queue or threshold.
+                    </p>
+                  )}
+                  {[...preview.notifications].reverse().map((n) => (
+                    <div key={n.id}>
+                      <Clock3 size={14} />
+                      <span>
+                        {time(n.eventTime)} UTC · {entityName(n.entityId)}
+                        <small>{n.evidence.message}</small>
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </section>
+            {(error || Object.keys(errors).length > 0) && (
+              <p role="alert" className="error-banner">
+                {error || 'Check the highlighted fields before continuing.'}
+              </p>
+            )}
+          </fieldset>
         </div>
         <div className="editor-footer">
           <button type="button" className="button secondary" onClick={onClose} disabled={!!busy}>

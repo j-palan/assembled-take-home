@@ -2207,3 +2207,12 @@ dialog::backdrop {
     font-size: 9px;
   }
 }
+
+.editor-body {
+  min-height: 0;
+}
+
+.editor-fields {
+  display: grid;
+  gap: 24px;
+}
