@@ -13,11 +13,21 @@ test('API rule CRUD, isolated preview, replay, delivery and reset preserving rul
   await once(server, 'listening');
   const address = server.address() as { port: number };
   async function request(path: string, method = 'GET', body?: unknown) {
-    const response = await fetch(`http://127.0.0.1:${address.port}/api/${path}`, { method, headers: { 'Content-Type': 'application/json' }, body: body === undefined ? undefined : JSON.stringify(body) });
-    return { status: response.status, body: response.status === 204 ? null : await response.json() };
+    const response = await fetch(`http://127.0.0.1:${address.port}/api/${path}`, {
+      method,
+      headers: { 'Content-Type': 'application/json' },
+      body: body === undefined ? undefined : JSON.stringify(body),
+    });
+    return {
+      status: response.status,
+      body: response.status === 204 ? null : await response.json(),
+    };
   }
   try {
-    assert.equal((await request('rules', 'POST', { ...defaultRules[0], queueIds: [] })).status, 422);
+    assert.equal(
+      (await request('rules', 'POST', { ...defaultRules[0], queueIds: [] })).status,
+      422,
+    );
     const created = await request('rules', 'POST', defaultRules[0]);
     assert.equal(created.status, 201);
     const preview = await request('preview', 'POST', defaultRules[0]);
@@ -33,7 +43,11 @@ test('API rule CRUD, isolated preview, replay, delivery and reset preserving rul
     assert.equal(store.deliveredCount(), 1);
     assert.equal((await request('notifications')).body.length, 1);
     const rule = created.body;
-    assert.equal((await request(`rules/${rule.id}`, 'PUT', { ...defaultRules[0], enabled: false })).body.revision, 2);
+    assert.equal(
+      (await request(`rules/${rule.id}`, 'PUT', { ...defaultRules[0], enabled: false })).body
+        .revision,
+      2,
+    );
     await request('replay', 'POST', { action: 'reset' });
     assert.equal((await request('state')).body.rules.length, 1);
     assert.equal((await request('state')).body.notifications.length, 0);
@@ -41,21 +55,33 @@ test('API rule CRUD, isolated preview, replay, delivery and reset preserving rul
     assert.equal((await request(`rules/${rule.id}`, 'DELETE')).status, 404);
     assert.equal((await request('events', 'POST', {})).status, 422);
     assert.equal((await request('missing')).status, 404);
-    const malformed = await fetch(`http://127.0.0.1:${address.port}/api/events`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: '{' });
+    const malformed = await fetch(`http://127.0.0.1:${address.port}/api/events`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: '{',
+    });
     assert.equal(malformed.status, 400);
-  } finally { replay.pause(); server.close(); server.closeAllConnections(); store.close(); }
+  } finally {
+    replay.pause();
+    server.close();
+    server.closeAllConnections();
+    store.close();
+  }
 });
 
 test('replay pauses and resumes from its durable cursor; preview has no delivery side effects', () => {
   const store = new Store();
   try {
     const replay = new Replay(store);
-    replay.step(); replay.step();
+    replay.step();
+    replay.step();
     const restarted = new Replay(store);
     assert.equal(restarted.status().cursor, 2);
     assert.equal(restarted.status().playing, false);
     restarted.step();
     assert.equal(store.listReceipts().length, 3);
     assert.equal(store.getMeta('replayCursor'), '3');
-  } finally { store.close(); }
+  } finally {
+    store.close();
+  }
 });

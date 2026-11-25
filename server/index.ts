@@ -21,14 +21,22 @@ if (process.env.NODE_ENV === 'production') {
   closeVite = () => vite.close();
 }
 const worker = setInterval(() => {
-  try { store.flushOutbox(); } catch (error) { console.error('Outbox worker failed', error); }
+  try {
+    store.flushOutbox();
+  } catch (error) {
+    console.error('Outbox worker failed', error);
+  }
 }, 2000);
 store.flushOutbox();
 const port = Number(process.env.PORT ?? 3000);
-const server = app.listen(port, '127.0.0.1', () => console.log(`Intraday → http://localhost:${port}`));
+const server = app.listen(port, '127.0.0.1', () =>
+  console.log(`Intraday → http://localhost:${port}`),
+);
 async function shutdown() {
-  replay.pause(); clearInterval(worker);
-  server.close(); server.closeAllConnections();
+  replay.pause();
+  clearInterval(worker);
+  server.close();
+  server.closeAllConnections();
   await closeVite?.();
   store.close();
 }
