@@ -1,4 +1,4 @@
-import type { Rule } from '../server/domain';
+import type { Event, Rule } from '../server/domain';
 import type { Incident, Notification, Receipt, Outcome } from '../server/store';
 import type { Replay } from '../server/replay';
 
@@ -8,7 +8,7 @@ export type AppState = {
   notifications: Notification[];
   receipts: Receipt[];
   stats: { outcome: Outcome; count: number }[];
-  observations: { type: string; ts: string; queue_id?: string; agent_id?: string }[];
+  observations: Event[];
   replay: ReturnType<Replay['status']>;
 };
 export type Preview = Pick<AppState, 'notifications' | 'incidents' | 'stats'>;

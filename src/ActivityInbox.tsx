@@ -3,6 +3,8 @@ import { Bell, CheckCheck, ChevronDown } from 'lucide-react';
 import { recipients } from '../server/domain';
 import { entityName, time, type AppState } from './api';
 import { EmptyState } from './ui';
+import { incompleteCheck, incompleteChecks, observationStamp } from './observations';
+import { UnknownChecks } from './UnknownChecks';
 
 export function ActivityInbox({
   data,
@@ -27,6 +29,7 @@ export function ActivityInbox({
   );
   return (
     <section aria-label="Notification history">
+      <UnknownChecks checks={incompleteChecks(data.observations, data.rules)} />
       <div className="list-toolbar">
         <div className="segmented" aria-label="Filter alerts">
           {[
@@ -61,6 +64,13 @@ export function ActivityInbox({
         {notifications.map((n) => {
           const incident = data.incidents.find((i) => i.id === n.incidentId);
           const state = incident?.status ?? 'closed';
+          const latestCheck = data.observations.find(
+            (e) => e.type === 'adherence_check' && e.agent_id === n.entityId,
+          );
+          const unknown =
+            state === 'active' && latestCheck?.type === 'adherence_check'
+              ? incompleteCheck(latestCheck)
+              : null;
           const recipientName = recipients.find((r) => r.id === n.recipientId)?.name;
           return (
             <article className="notification-card" key={n.id}>
@@ -89,6 +99,15 @@ export function ActivityInbox({
                     {recipientName} · {n.channel === 'slack' ? 'Slack' : 'In-app'} ·{' '}
                     {n.deliveredAt ? 'Delivered' : n.lastError ? 'Retrying' : 'Sending…'}
                   </small>
+                  <small className="observation-status">
+                    <span>
+                      Last observed{' '}
+                      {observationStamp(
+                        unknown?.observation.ts ?? incident?.lastObservedAt ?? null,
+                      )}
+                    </span>
+                    {unknown && <span className="data-badge">{unknown.reason}</span>}
+                  </small>
                 </span>
                 <span className="notification-time">{time(n.eventTime).slice(0, 5)}</span>
                 <ChevronDown size={17} className={expanded === n.id ? 'rotated' : ''} />
@@ -103,8 +122,22 @@ export function ActivityInbox({
                     </div>
                     <div>
                       <h3>Latest update</h3>
-                      <p>{incident?.evidence.message}</p>
-                      <small>Last observed {time(incident?.lastObservedAt ?? null)} UTC</small>
+                      {unknown ? (
+                        <>
+                          <p className="data-unknown-title">{unknown.reason}</p>
+                          <p>Last confirmed: {incident?.evidence.message}</p>
+                          <small>
+                            Confirmed {observationStamp(incident?.lastObservedAt ?? null)}
+                          </small>
+                        </>
+                      ) : (
+                        <>
+                          <p>{incident?.evidence.message}</p>
+                          <small>
+                            Last observed {observationStamp(incident?.lastObservedAt ?? null)}
+                          </small>
+                        </>
+                      )}
                       {incident?.closeReason && (
                         <p className="close-reason">{incident.closeReason}</p>
                       )}

@@ -213,3 +213,87 @@ test('preview explains matching backlog evidence and zero-result thresholds', as
   const state = await (await page.request.get('/api/state')).json();
   expect(state.notifications).toHaveLength(0);
 });
+
+test('freshness and unknown duration remain explicit until a newer valid check arrives', async ({
+  page,
+  request,
+}) => {
+  await request.post('/api/replay', { data: { action: 'finish' } });
+  await page.goto('/#activity');
+  const missing = page.getByRole('region', { name: 'Checks needing data' });
+  await expect(missing.getByText('Agent a_23 · Duration unknown')).toBeVisible();
+  const activeCard = page.locator('.notification-card').filter({ hasText: 'Agent a_88' });
+  await expect(
+    activeCard.getByText('Last observed May 26, 10:30:00 UTC', { exact: true }),
+  ).toBeVisible();
+  const unknown = {
+    event_id: 'ui_unknown_88',
+    ts: '2026-05-26T10:31:00Z',
+    type: 'adherence_check',
+    agent_id: 'a_88',
+    queue_ids: ['tier_2'],
+    scheduled_state: 'available',
+    actual_state: 'in_meeting',
+    in_violation: true,
+    violation_started_at: null,
+  };
+  const response = await request.post('/api/events', { data: unknown });
+  expect((await response.json()).outcome).toBe('unknown');
+  await expect(
+    activeCard.getByRole('button').getByText('Duration unknown', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    activeCard.getByText('Last observed May 26, 10:31:00 UTC', { exact: true }),
+  ).toBeVisible();
+  await activeCard.getByRole('button', { expanded: false }).click();
+  await expect(
+    activeCard.getByText('Confirmed May 26, 10:30:00 UTC', { exact: true }),
+  ).toBeVisible();
+  await expect(activeCard.getByText(/^Last confirmed: Out of adherence for 30 min/)).toBeVisible();
+  await page.screenshot({ path: 'test-results/unknown-duration.png', fullPage: true });
+  const stale = await request.post('/api/events', {
+    data: {
+      ...unknown,
+      event_id: 'ui_stale_88',
+      ts: '2026-05-26T10:29:00Z',
+      in_violation: false,
+      actual_state: 'available',
+    },
+  });
+  expect((await stale.json()).outcome).toBe('stale');
+  await expect(
+    activeCard.getByRole('button').getByText('Duration unknown', { exact: true }),
+  ).toBeVisible();
+  const state = await (await request.get('/api/state')).json();
+  expect(state.notifications).toHaveLength(4);
+  expect(state.incidents.find((i: { entityId: string }) => i.entityId === 'a_88').status).toBe(
+    'active',
+  );
+  await request.post('/api/events', {
+    data: {
+      ...unknown,
+      event_id: 'ui_recovered_88',
+      ts: '2026-05-26T10:32:00Z',
+      in_violation: false,
+      actual_state: 'available',
+    },
+  });
+  await expect(activeCard.getByText('Resolved', { exact: true })).toBeVisible();
+  await expect(
+    activeCard.getByRole('button').getByText('Duration unknown', { exact: true }),
+  ).toHaveCount(0);
+  await expect(missing.getByText('Agent a_23 · Duration unknown')).toBeVisible();
+  await request.post('/api/events', {
+    data: {
+      ...unknown,
+      event_id: 'ui_recovered_23',
+      agent_id: 'a_23',
+      ts: '2026-05-26T10:33:00Z',
+      in_violation: false,
+      actual_state: 'available',
+    },
+  });
+  await expect(missing).toHaveCount(0);
+  await page.getByRole('link', { name: 'Overview', exact: true }).click();
+  await expect(page.getByRole('heading', { name: 'No active issues' })).toBeVisible();
+});

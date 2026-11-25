@@ -1724,3 +1724,76 @@ dialog::backdrop {
 .preview-results > div > svg {
   margin-top: 2px;
 }
+
+.observation-status {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 9px;
+}
+.data-badge {
+  background: #fff2de;
+  color: #875b1d;
+  font-size: 10px;
+  border-radius: 4px;
+  padding: 3px 6px;
+}
+.data-unknown-title {
+  font-weight: 600;
+  color: #875b1d !important;
+  margin-bottom: 7px;
+}
+.unknown-checks {
+  background: #fffcf4;
+  border: 1px solid #eadfc7;
+  border-radius: 8px;
+  padding: 17px 18px;
+  margin-bottom: 20px;
+}
+.unknown-checks h3 {
+  font-size: 11px;
+  font-weight: 600;
+  color: #816139;
+  margin-bottom: 13px;
+}
+.unknown-check {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  margin-top: 15px;
+}
+.unknown-check > svg {
+  color: #9b773b;
+  margin-top: 2px;
+}
+.unknown-check strong {
+  font-size: 12px;
+  font-weight: 600;
+  color: #705332;
+  line-height: 1.6;
+}
+.unknown-check p {
+  font-size: 12px;
+  color: #786447;
+  margin: 5px 0;
+}
+.unknown-check small {
+  font-size: 11px;
+  color: #786447;
+  line-height: 1.6;
+}
+.attention-panel > .unknown-checks {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid #eadfc7;
+  border-radius: 0 0 10px 10px;
+  padding: 17px 22px;
+}
+@media (max-width: 450px) {
+  .attention-panel > .unknown-checks {
+    padding: 17px 18px;
+  }
+  .observation-status {
+    line-height: 1.6;
+  }
+}

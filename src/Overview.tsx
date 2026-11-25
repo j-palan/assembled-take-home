@@ -1,6 +1,8 @@
 import { ArrowRight, Bell, Check, Clock3, ShieldCheck } from 'lucide-react';
 import { recipients, type Rule } from '../server/domain';
 import { entityName, time, type AppState } from './api';
+import { incompleteChecks } from './observations';
+import { UnknownChecks } from './UnknownChecks';
 
 export function Overview({
   data,
@@ -13,6 +15,7 @@ export function Overview({
 }) {
   const active = data.incidents.filter((i) => i.status === 'active');
   const enabled = data.rules.filter((r) => r.enabled).length;
+  const unknown = incompleteChecks(data.observations, data.rules);
   const latest = data.observations.reduce<string | null>(
     (last, observation) => (!last || observation.ts > last ? observation.ts : last),
     null,
@@ -36,7 +39,7 @@ export function Overview({
               </span>
             )}
           </div>
-          {active.length === 0 ? (
+          {active.length === 0 && unknown.length === 0 ? (
             <div className="attention-empty">
               <span>
                 <ShieldCheck size={25} />
@@ -77,6 +80,7 @@ export function Overview({
               })}
             </div>
           )}
+          <UnknownChecks checks={unknown} />
         </section>
         <section className="overview-panel rule-overview" aria-labelledby="rules-summary-title">
           <div className="overview-section-heading">
