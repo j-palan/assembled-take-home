@@ -13,7 +13,7 @@ npm ci
 npm run dev
 ```
 
-Open **http://localhost:3000**. Three example rules are created on the first run. Press **Run demo** to see the notifications immediately. Open the arrow beside it for optional step-by-step replay controls.
+Open **http://localhost:3000**. Three example rules are created on the first run. The **Overview** is the landing page. Press **Run demo** to populate active issues and recent alerts immediately. Open the arrow beside it for optional step-by-step replay controls.
 
 For a production build:
 
@@ -28,9 +28,9 @@ Prefer the terminal? `npm run replay` evaluates the sample in an isolated, in-me
 
 ## A three-minute demo
 
-1. Open **Rules**. Each row shows the condition and recipient; the switch turns it on or pauses it.
+1. Start on **Overview**. **Needs attention** shows active issues, **Rules** summarizes enabled/paused configuration, and **Recent alerts** shows the latest notifications. Select an issue or alert to open its evidence in Activity. Open **Rules** to manage configuration.
 2. Select **Create rule**. Choose a condition, queues, and recipient. Names are generated automatically; expand **Rule name** to customize one. **Test with sample** shows how many alerts it would produce without changing Activity.
-3. Select **Run demo**. The app evaluates the sample morning and opens **Activity** with the results. Expand an alert to see why it fired and its latest update. Delivery receipts and event IDs are under **Delivery & event details**.
+3. Select **Run demo**. The app evaluates the sample morning and returns to **Overview** with the results. Select an alert to open **Activity**. Expand an alert to see why it fired and its latest update. Delivery receipts and event IDs are under **Delivery & event details**.
 4. For a slower walkthrough, open the arrow beside **Run demo** to play, pause, or step through events. **View event log** shows duplicate/conflict handling and missing data.
 5. Edit a rule by selecting its name, or use its three-dot menu. **Reset demo** keeps your rules and clears the sample history so you can try again.
 
@@ -117,6 +117,7 @@ Tests cover exact threshold boundaries, incident suppression/recovery/recurrence
 | `server/replay.ts`      | Arrival-order replay with durable cursor                              |
 | `server/app.ts`         | HTTP API, request validation, isolated preview                        |
 | `server/index.ts`       | Server startup, client serving, retry worker, shutdown                |
+| `src/Overview.tsx`      | Active issues, recent alerts, and rule summary                        |
 | `src/RuleEditor.tsx`    | Condition selection, generated names, validation, sample preview      |
 | `src/RuleCard.tsx`      | Rule summaries and controls                                           |
 | `src/ActivityInbox.tsx` | Routing receipts and incident evidence                                |
