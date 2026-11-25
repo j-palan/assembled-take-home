@@ -340,6 +340,14 @@ test('edit impact counts active issues and saving stops them without retrospecti
     ),
   ).toBeVisible();
   await page.setViewportSize({ width: 375, height: 812 });
+  await expect(editor.getByRole('status', { name: 'Impact of saving' })).toBeInViewport({
+    ratio: 1,
+  });
+  await expect(
+    editor.getByText(
+      'They’ll be marked stopped. The updated rule starts with the next observation.',
+    ),
+  ).toBeInViewport({ ratio: 1 });
   await page.screenshot({ path: 'test-results/edit-impact-mobile.png', fullPage: true });
   await editor.getByRole('button', { name: 'Save changes' }).click();
   await expect(editor).not.toBeVisible();

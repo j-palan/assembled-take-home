@@ -1822,3 +1822,16 @@ dialog::backdrop {
   color: #786447;
   margin-top: 6px;
 }
+
+.editor-actions {
+  flex-shrink: 0;
+  background: white;
+}
+.editor-actions > .edit-impact {
+  margin: 0 26px 14px;
+}
+@media (max-width: 450px) {
+  .editor-actions > .edit-impact {
+    margin: 0 20px 12px;
+  }
+}

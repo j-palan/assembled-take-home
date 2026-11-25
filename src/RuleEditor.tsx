@@ -306,20 +306,6 @@ export function RuleEditor({
               <Check size={16} />
               <span>One alert per issue. We’ll update it until things recover.</span>
             </div>
-            {rule && activeIncidentCount > 0 && (
-              <div className="edit-impact" role="status" aria-label="Impact of saving">
-                <TriangleAlert size={18} />
-                <div>
-                  <strong>
-                    Saving will close {activeIncidentCount} current{' '}
-                    {activeIncidentCount === 1 ? 'issue' : 'issues'}.
-                  </strong>
-                  <p>
-                    They’ll be marked stopped. The updated rule starts with the next observation.
-                  </p>
-                </div>
-              </div>
-            )}
             {preview && (
               <section className="preview-results" aria-live="polite">
                 <strong>
@@ -345,19 +331,33 @@ export function RuleEditor({
             )}
           </fieldset>
         </div>
-        <div className="editor-footer">
-          <button
-            className="button secondary"
-            type="button"
-            disabled={!!busy}
-            onClick={() => void submit('preview')}
-          >
-            {busy === 'preview' && <LoaderCircle className="spin" size={16} />}Test with sample
-          </button>
-          <button className="button primary" type="submit" disabled={!!busy}>
-            {busy === 'save' && <LoaderCircle className="spin" size={16} />}
-            {rule ? 'Save changes' : 'Create rule'}
-          </button>
+        <div className="editor-actions">
+          {rule && activeIncidentCount > 0 && (
+            <div className="edit-impact" role="status" aria-label="Impact of saving">
+              <TriangleAlert size={18} />
+              <div>
+                <strong>
+                  Saving will close {activeIncidentCount} current{' '}
+                  {activeIncidentCount === 1 ? 'issue' : 'issues'}.
+                </strong>
+                <p>They’ll be marked stopped. The updated rule starts with the next observation.</p>
+              </div>
+            </div>
+          )}
+          <div className="editor-footer">
+            <button
+              className="button secondary"
+              type="button"
+              disabled={!!busy}
+              onClick={() => void submit('preview')}
+            >
+              {busy === 'preview' && <LoaderCircle className="spin" size={16} />}Test with sample
+            </button>
+            <button className="button primary" type="submit" disabled={!!busy}>
+              {busy === 'save' && <LoaderCircle className="spin" size={16} />}
+              {rule ? 'Save changes' : 'Create rule'}
+            </button>
+          </div>
         </div>
       </form>
     </dialog>
