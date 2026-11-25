@@ -1710,3 +1710,17 @@ dialog::backdrop {
     font-size: 12px;
   }
 }
+
+.preview-results small {
+  display: block;
+  font-size: 12px;
+  line-height: 1.6;
+  margin-top: 6px;
+  color: #536d4c;
+}
+.preview-results > div {
+  align-items: flex-start;
+}
+.preview-results > div > svg {
+  margin-top: 2px;
+}

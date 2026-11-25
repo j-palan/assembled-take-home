@@ -33,6 +33,9 @@ test('create and test a rule, run the demo, inspect delivery, then edit and dele
   await expect(editor.getByLabel('Notify when')).toBeDisabled();
   await expect(editor.getByText('1 alert in the sample morning')).toBeVisible();
   await expect(editor.getByText(/10:00:00 UTC/)).toBeVisible();
+  await expect(
+    editor.getByText('Oldest ticket waited 5 min 20 sec. SLA target: 5 min.'),
+  ).toBeVisible();
   await page.screenshot({ path: 'test-results/rule-preview.png', fullPage: true });
   await editor.getByRole('button', { name: 'Create rule', exact: true }).click();
   await expect(editor).not.toBeVisible();
@@ -184,4 +187,29 @@ test('overview shows active issues, recent alerts, and links to the matching evi
   await page.getByRole('dialog').getByRole('button', { name: 'Reset demo', exact: true }).click();
   await expect(page.getByRole('heading', { name: 'Ready to watch' })).toBeVisible();
   await expect(recent.getByRole('button')).toHaveCount(0);
+});
+
+test('preview explains matching backlog evidence and zero-result thresholds', async ({ page }) => {
+  await page.goto('/#rules');
+  await page.getByRole('button', { name: 'Create rule', exact: true }).click();
+  const editor = page.getByRole('dialog');
+  await editor.getByLabel('Notify when').selectOption('backlog');
+  await editor.getByRole('button', { name: 'Test with sample' }).click();
+  await expect(editor.getByText('22 tickets waiting. Your threshold is 20.')).toBeVisible();
+  await editor.getByLabel('More than', { exact: true }).fill('100');
+  await expect(editor.getByText('22 tickets waiting. Your threshold is 20.')).toHaveCount(0);
+  await editor.getByRole('button', { name: 'Test with sample' }).click();
+  await expect(editor.getByText('0 alerts in the sample morning')).toBeVisible();
+  await expect(
+    editor.getByText('No sample snapshot in Billing had more than 100 tickets waiting.'),
+  ).toBeVisible();
+  await page.setViewportSize({ width: 375, height: 812 });
+  await editor.getByLabel('Notify when').selectOption('adherence');
+  await editor.getByRole('button', { name: 'Test with sample' }).click();
+  await expect(
+    editor.getByText('Out of adherence for 10 min. Your threshold is 10 min.'),
+  ).toBeVisible();
+  await page.screenshot({ path: 'test-results/preview-reasons-mobile.png', fullPage: true });
+  const state = await (await page.request.get('/api/state')).json();
+  expect(state.notifications).toHaveLength(0);
 });

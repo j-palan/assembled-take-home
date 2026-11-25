@@ -4,6 +4,7 @@ import {
   queueOptions,
   recipients,
   ruleSchema,
+  type Evidence,
   type Kind,
   type Rule,
   type RuleInput,
@@ -21,6 +22,26 @@ export function describe(rule: RuleInput) {
   if (rule.kind === 'backlog')
     return `${scope} · More than ${rule.threshold ?? '…'} tickets waiting`;
   return `${scope} · Agent out of adherence for ${rule.threshold ?? '…'}+ minutes`;
+}
+function duration(seconds: number) {
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (!minutes) return `${remainder} sec`;
+  return `${minutes} min${remainder ? ` ${remainder} sec` : ''}`;
+}
+function previewReason(kind: Kind, evidence: Evidence) {
+  if (kind === 'backlog')
+    return `${evidence.value} tickets waiting. Your threshold is ${evidence.threshold}.`;
+  if (kind === 'sla')
+    return `Oldest ticket waited ${duration(evidence.value)}. SLA target: ${duration(evidence.threshold)}.`;
+  return `Out of adherence for ${duration(evidence.value)}. Your threshold is ${duration(evidence.threshold)}.`;
+}
+function emptyPreviewReason(rule: RuleInput) {
+  const scope = rule.queueIds.map(queueName).join(', ');
+  if (rule.kind === 'sla') return `No sample ticket in ${scope} exceeded its queue’s SLA.`;
+  if (rule.kind === 'backlog')
+    return `No sample snapshot in ${scope} had more than ${rule.threshold} tickets waiting.`;
+  return `No sample check in ${scope} confirmed a violation lasting at least ${rule.threshold} minutes.`;
 }
 function suggestedName(rule: RuleInput) {
   const scope = rule.queueIds.map(queueName).join(', ') || 'Queue';
@@ -281,14 +302,13 @@ export function RuleEditor({
                   {preview.notifications.length}{' '}
                   {preview.notifications.length === 1 ? 'alert' : 'alerts'} in the sample morning
                 </strong>
-                {preview.notifications.length === 0 && (
-                  <p>No matching conditions in this sample.</p>
-                )}
+                {preview.notifications.length === 0 && <p>{emptyPreviewReason(draft)}</p>}
                 {[...preview.notifications].reverse().map((n) => (
                   <div key={n.id}>
                     <Clock3 size={14} />
                     <span>
                       {time(n.eventTime)} UTC · {entityName(n.entityId)}
+                      <small>{previewReason(draft.kind, n.evidence)}</small>
                     </span>
                   </div>
                 ))}
