@@ -139,6 +139,10 @@ Tests cover exact threshold boundaries, incident suppression/recovery/recurrence
 
 For example, ingest the first sample record with `head -n 1 events.jsonl | curl -sS -H 'Content-Type: application/json' --data-binary @- http://localhost:3000/api/events`. Repeating it demonstrates idempotency. Manual ingestion shares the workspace; reset before reproducing fixture outcomes.
 
+## Time Taken
+
+Roughly 3 hours to complete 
+
 ## AI assistance
 
 OpenAI Codex helped scope the product, inspect the fixture, implement the code and tests, refine the UI, and draft this writeup. Its local UI/UX skill informed interface checks. Verification included strict compilation, transactional failure tests, exact sample replay assertions, browser workflows, visual inspection of generated screenshots, and a dependency audit. The audit identified an issue in the initial validation dependency; the implementation was updated to a patched release and retested. No external AI-generated imagery or hosted app builder was used.
